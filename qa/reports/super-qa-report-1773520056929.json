@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-03-14T20:27:36.929Z",
+  "mode": "fast",
+  "appRoot": "/Users/tatsheen/claw-architect/pdfezfill_desktop",
+  "total_duration_ms": 3877,
+  "overall_status": "FAIL",
+  "layers": [
+    {
+      "layer": "static",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "Semgrep not configured (qa/semgrep/run-semgrep.sh missing)"
+    },
+    {
+      "layer": "unit",
+      "status": "fail",
+      "duration_ms": 3875,
+      "findings": 0,
+      "critical": 0,
+      "details": "0 passed, 0 failed. Exit code 1."
+    },
+    {
+      "layer": "property",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "Property test directory not found."
+    },
+    {
+      "layer": "e2e",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "App not built. Run: npm run build"
+    },
+    {
+      "layer": "load",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "Skipped (--fast mode)."
+    },
+    {
+      "layer": "ai-explorer",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "Skipped (--fast mode)."
+    },
+    {
+      "layer": "observability",
+      "status": "warn",
+      "duration_ms": 0,
+      "findings": 6,
+      "critical": 0,
+      "details": "Missing observability files: tracing.ts, metrics.ts, logger.ts, health-check.ts, qa-diagnostics.ts, index.ts"
+    }
+  ],
+  "summary": {
+    "total_layers": 7,
+    "passed": 0,
+    "failed": 1,
+    "warned": 1,
+    "skipped": 5,
+    "total_findings": 6,
+    "total_critical": 0
+  }
+}

@@ -1,0 +1,208 @@
+# AutoFillPDF - Complete Documentation
+
+> AutoFillPDF is an online tool that converts any PDF form (including scanned, non-fillable, or image-based PDFs) into a clean web form, allows users to fill it digitally with optional autofill from saved profiles, add signatures, and download a completed PDF with answers overlaid on the original document.
+
+---
+
+## About AutoFillPDF
+
+AutoFillPDF solves a common frustration: dealing with PDF forms that require printing, handwriting, and scanning. Many PDF forms are not digitally fillable, especially scanned documents, government forms, or older paperwork.
+
+AutoFillPDF uses OCR (Optical Character Recognition) technology to read any PDF - even scanned or image-based documents - and converts them into clean, easy-to-use web forms. Users fill out the form in their browser, add a digital signature, and download a completed PDF with their answers perfectly placed on the original document.
+
+---
+
+## Key Features
+
+### Works with Any PDF
+- Scanned documents
+- Photos of paper forms
+- Non-fillable PDFs
+- Image-based forms
+- Older PDF formats
+
+### Smart Form Detection
+- OCR-powered field detection
+- Automatic field type recognition (text, date, checkbox, signature)
+- Quality scoring to indicate confidence level
+- Manual field adjustment when needed
+
+### Digital Signature
+- Built-in signature pad
+- Draw signature with mouse or touch
+- Signature saved for future forms (Pro users)
+
+### Autofill Profiles (Pro Feature)
+- Save common information (name, address, SSN, etc.)
+- One-click autofill on any form
+- Multiple profiles for different contexts
+- Smart field matching
+
+### Security & Privacy
+- 256-bit SSL encryption
+- Files stored securely in cloud storage
+- Automatic deletion: 72 hours (guests), 180 days (Pro users)
+- No data selling or sharing
+- GDPR compliant
+
+---
+
+## Pricing Plans
+
+### Guest (One-time) - $5
+- Single form processing
+- No account required
+- 72-hour file retention
+- Basic OCR processing
+
+### Starter - $7/month
+- 2 forms included per month
+- 1 saved profile for autofill
+- Extra forms at $2 each
+- 180-day form history
+- 7-day free trial
+
+### Pro+ - $15/month (Best Value)
+- 10 forms included per month
+- Multiple saved profiles
+- Priority processing
+- Extra forms at $2 each
+- 180-day form history
+- 7-day free trial
+
+### Enterprise - $49/month
+- 50 forms included per month
+- Unlimited team members
+- Team sharing capabilities
+- Bulk processing
+- Dedicated support
+- Extra forms at $1.50 each
+- 7-day free trial
+
+**Note**: Current pricing is Founding Member rates, available through January 2026.
+
+---
+
+## How to Use AutoFillPDF
+
+### Step 1: Upload Your PDF
+1. Go to https://autofilllpdf.com/upload
+2. Drag and drop your PDF or click to browse
+3. Wait for OCR processing (usually 10-30 seconds)
+4. Review the detected fields
+
+### Step 2: Fill the Form
+1. The system displays a clean web form based on detected fields
+2. Fill in your information in each field
+3. Use autofill (Pro) to populate common fields automatically
+4. Add your signature using the signature pad
+
+### Step 3: Download Your PDF
+1. Review your completed form
+2. Complete payment if required (guests: $5, subscribers: use included forms)
+3. Download your completed PDF
+4. Submit to wherever needed (email, upload, print)
+
+---
+
+## Frequently Asked Questions
+
+### Does it work with scanned PDFs?
+Yes! AutoFillPDF uses OCR technology to read scanned documents, photos of forms, and image-based PDFs. Just upload any PDF and the system will convert it to a fillable form.
+
+### Is my data secure?
+Yes. AutoFillPDF uses 256-bit SSL encryption for all data transfers. Guest files are automatically deleted after 72 hours, and Pro user files after 180 days. We never sell or share your data.
+
+### Can I cancel anytime?
+Yes. You can cancel your subscription anytime from your dashboard. Your access continues until the end of the current billing period.
+
+### What if I need more forms than my plan includes?
+You can purchase extra forms at discounted rates: $2/form for Starter and Pro plans, $1.50/form for Enterprise.
+
+### How does autofill work?
+Save your information (name, address, etc.) in a profile. When you upload a new form, click 'Autofill' and AutoFillPDF automatically matches and fills the fields. Pro users can save multiple profiles for different contexts (personal, work, etc.).
+
+### What file formats are supported?
+AutoFillPDF works with PDF files. If you have a form in another format (Word, image), convert it to PDF first, then upload.
+
+### What if the OCR misses a field?
+You can manually add or edit fields using the built-in field editor. The system shows confidence scores so you know which fields may need adjustment.
+
+### Is there a refund policy?
+Yes. AutoFillPDF offers a 30-day satisfaction guarantee. If you're not satisfied, contact support for a full refund.
+
+---
+
+## Common Use Cases
+
+### Tax Forms
+- W-4 (Employee's Withholding Certificate)
+- W-9 (Request for Taxpayer Identification Number)
+- 1099 forms
+- State tax forms
+
+### Government Applications
+- Passport applications
+- DMV forms
+- Social security forms
+- Immigration paperwork
+
+### Medical & Insurance
+- Patient intake forms
+- Insurance claims
+- Authorization forms
+- HIPAA forms
+
+### Business & Legal
+- Contracts
+- NDA agreements
+- Employment applications
+- Business licenses
+
+### Education
+- School enrollment forms
+- Financial aid applications
+- Permission slips
+- Registration forms
+
+---
+
+## Technical Information
+
+### Supported Browsers
+- Chrome (recommended)
+- Firefox
+- Safari
+- Edge
+- Mobile browsers (iOS Safari, Chrome for Android)
+
+### File Requirements
+- PDF format only
+- Maximum file size: 20MB
+- Works with multi-page PDFs
+- Supports scanned/image-based content
+
+### Processing Time
+- Standard: 10-30 seconds per page
+- Complex forms: up to 60 seconds
+- Priority processing (Pro+): faster queue
+
+---
+
+## Contact & Support
+
+- **Website**: https://autofilllpdf.com
+- **Support Email**: support@autofilllpdf.com
+- **Privacy Policy**: https://autofilllpdf.com/privacy
+- **Terms of Service**: https://autofilllpdf.com/terms
+- **Refund Policy**: https://autofilllpdf.com/refund
+
+---
+
+## Company Information
+
+AutoFillPDF is a web-based SaaS application designed to simplify form filling for individuals and businesses. Our mission is to eliminate the frustration of dealing with non-fillable PDF forms by providing a simple, secure, and efficient digital solution.
+
+**Location**: Online service
+**Founded**: 2024
+**Website**: https://autofilllpdf.com
