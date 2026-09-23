@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+out/
+*.dmg
+*.pkg
+
+# env & secrets — never commit
+.env
+.env.local
+.env.*.local
+license.json
+
+# syncthing artifacts — never commit
+*.tmp
+.syncthing.*
+*.sync-conflict-*
+
+# logs & QA
+*.log
+npm-debug.log*
+coverage/
+.nyc_output/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

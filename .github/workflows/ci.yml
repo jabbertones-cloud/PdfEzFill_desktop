@@ -1,0 +1,69 @@
+# CI: run the contract/smoke suite on Linux and macOS.
+# Conventions adapted from jabbertones-cloud/claw-architect (.github/workflows/ci.yml).
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ['20', '22']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Script parse check
+        run: |
+          for script in scripts/license-stub.mjs tests/smoke.test.mjs; do
+            node --check "$script" && echo "OK $script"
+          done
+
+      - name: Run tests (node --test, zero dependencies)
+        run: npm test
+
+  license-stub-smoke:
+    # Prove the test-mode validation endpoint actually serves its contract.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Start stub and exercise the contract
+        run: |
+          node scripts/license-stub.mjs &
+          STUB_PID=$!
+          sleep 1
+          curl -sf -X POST http://127.0.0.1:8787/v1/license/validate \
+            -H 'Content-Type: application/json' \
+            -d '{"licenseKey":"PDFEZ-ABCD-ABCD-ABCD-ABCD","email":"qa@example.com"}' \
+            | grep -q '"valid":true'
+          curl -sf -X POST http://127.0.0.1:8787/v1/license/validate \
+            -H 'Content-Type: application/json' \
+            -d '{"licenseKey":"bogus","email":"qa@example.com"}' \
+            | grep -q '"valid":false'
+          kill $STUB_PID
+          echo "license-stub contract OK"
