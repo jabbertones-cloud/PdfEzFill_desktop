@@ -36,10 +36,15 @@ ocr delegate preview --from "$BASE" --to "$HEAD"
 
 echo
 echo "==> [3/4] ocr delegate rule (resolved review rules for changed files)"
-CHANGED="$(git diff --name-only "$BASE...$HEAD" | tr '\n' ' ' || true)"
+COMMITTED="$(git diff --name-only "$BASE...$HEAD" 2>/dev/null || true)"
+UNCOMMITTED="$(git status --short | awk '{print $2}' || true)"
+CHANGED="$(printf '%s\n%s\n' "$COMMITTED" "$UNCOMMITTED" | sed '/^$/d' | sort -u | tr '\n' ' ')"
 if [ -z "$CHANGED" ]; then
-  echo "No changed files between $BASE and $HEAD."
+  echo "No changed files between $BASE and $HEAD (committed or uncommitted)."
 else
+  echo "Reviewing committed + uncommitted changes:"
+  echo "  $CHANGED"
+  # Word-splitting here is intentional; paths with spaces are out of scope.
   # shellcheck disable=SC2086
   ocr delegate rule $CHANGED
 fi

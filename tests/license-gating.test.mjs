@@ -110,10 +110,15 @@ describe('trial gating: 3 free PDFs, then paywall', () => {
     }
   });
 
-  it('trial counter must not be negative', () => {
-    assert.throws(() => {
-      if (-1 < 0) throw new RangeError('trial usage count cannot be negative');
-    }, RangeError);
+  it('end-to-end funnel: trial exhausted, then activation restores access', () => {
+    // The monetization funnel: user burns 3 trial fills, buys, activates.
+    const key = 'PDFEZ-AAAA-BBBB-CCCC-DDDD';
+    assert.equal(gateDecision(newLicenseRow(), 3).reason, 'paywall');
+    const r = activateLicense(key, 'buyer@example.com', { valid: true, plan: 'lifetime' });
+    assert.equal(r.success, true);
+    const d = gateDecision(r.row, 3);
+    assert.equal(d.allowed, true);
+    assert.equal(d.reason, 'licensed');
   });
 });
 

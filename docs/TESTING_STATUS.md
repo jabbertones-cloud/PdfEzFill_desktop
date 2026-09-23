@@ -71,3 +71,14 @@ surface as a test failure, which is the point.
    app, no signing/notarization, no DMG, no auto-update, no EULA/LICENSE
    file, no Apple Developer Program membership. The trial/paywall UX in the
    tests exists only as a contract, not as shipped software.
+
+## Review outcome for this branch (2026-09-23)
+
+- Ran `ocr delegate preview --from main --to feature/testing-harness`
+  (8 reviewable files) and `ocr delegate rule` on the changed JS/shell
+  files; applied the emitted rule set by hand.
+- Findings fixed on the branch: (1) a tautological "negative trial
+  counter" test replaced with an end-to-end trial→activation→licensed
+  funnel test; (2) `scripts/review.sh` now includes uncommitted changes
+  in the review surface.
+- No blockers remaining. `npm test`: 78/78 green after fixes.
