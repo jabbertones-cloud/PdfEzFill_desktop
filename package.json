@@ -1,1 +1,16 @@
-{"description":"PdfEzFill desktop Mac app. Scaffold only — application sources pending restore (see docs/INVENTORY.md).","engines":{"node":">=20"},"name":"pdfezfill-desktop","private":true,"scripts":{"license:stub":"node scripts/license-stub.mjs","review:ecc":"bash scripts/ecc-review.sh","test":"node --test \"tests/**/*.test.mjs\""},"type":"module","version":"0.0.0"}
+{
+  "description": "PdfEzFill desktop Mac app. Scaffold only — application sources pending restore (see docs/INVENTORY.md).",
+  "engines": {
+    "node": ">=20"
+  },
+  "name": "pdfezfill-desktop",
+  "private": true,
+  "scripts": {
+    "license:stub": "node scripts/license-stub.mjs",
+    "review:ecc": "bash scripts/ecc-review.sh",
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "review:ocr": "bash scripts/review.sh"
+  },
+  "type": "module",
+  "version": "0.0.0"
+}

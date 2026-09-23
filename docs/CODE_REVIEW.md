@@ -94,3 +94,12 @@ running `/code-review` before pushing.
 Until the application sources are restored (see `docs/INVENTORY.md`), both
 tools review the scaffold/docs on this branch — the real value starts when
 `server/` and `client/` sources land.
+
+## Pre-merge step (delegation mode, no LLM key needed)
+
+`scripts/review.sh` runs the required pre-merge review using `ocr delegate`
+(open-code-review v1.12.9, delegation mode): it prints which files will be
+reviewed (`ocr delegate preview --from main --to <branch>`) plus the resolved
+rule set for the changed files (`ocr delegate rule <files>`), and the
+reviewer applies those rules to the diff, fixing every blocker/major before
+merging. Full workflow: `CONTRIBUTING.md`.
