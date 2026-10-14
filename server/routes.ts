@@ -5,7 +5,7 @@ import multer from "multer";
 import { generateApiToken } from "./desktopAuth.js";
 import { randomUUID } from "crypto";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, optionalAuth } from "./desktopAuth.js";
+import { setupAuth, isAuthenticated, optionalAuth, requireFillEntitlement } from "./desktopAuth.js";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { formFieldSchema, fieldOverrideSchema, type FormField, type FieldOverride, planConfigs, type PlanType } from "@shared/schema";
@@ -506,7 +506,7 @@ export async function registerRoutes(
   });
 
   // ============ FORM ROUTES ============
-  app.post("/api/forms/upload", optionalAuth, upload.single("pdf"), async (req: Request, res: Response) => {
+  app.post("/api/forms/upload", requireFillEntitlement, upload.single("pdf"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         console.log(`[upload] No file in request`);
@@ -661,7 +661,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/forms/:formId", optionalAuth, async (req: Request, res: Response) => {
+  app.get("/api/forms/:formId", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId } = req.params;
       const form = await storage.getForm(formId);
@@ -700,7 +700,7 @@ export async function registerRoutes(
   });
 
   // Get PDF page image for visual field editor
-  app.get("/api/forms/:formId/page/:pageNum", optionalAuth, async (req: Request, res: Response) => {
+  app.get("/api/forms/:formId/page/:pageNum", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId, pageNum } = req.params;
       const pageNumber = parseInt(pageNum, 10);
@@ -741,7 +741,7 @@ export async function registerRoutes(
   });
 
   // Poll form status (for OCR processing)
-  app.get("/api/forms/:formId/status", optionalAuth, async (req: Request, res: Response) => {
+  app.get("/api/forms/:formId/status", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId } = req.params;
       const form = await storage.getForm(formId);
@@ -771,7 +771,7 @@ export async function registerRoutes(
   });
 
   // Generate PDF after payment success
-  app.post("/api/forms/:formId/generate", optionalAuth, async (req: Request, res: Response) => {
+  app.post("/api/forms/:formId/generate", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId } = req.params;
       const form = await storage.getForm(formId);
@@ -846,7 +846,7 @@ export async function registerRoutes(
   });
 
   // Manual field editing
-  app.put("/api/forms/:formId/fields", optionalAuth, async (req: Request, res: Response) => {
+  app.put("/api/forms/:formId/fields", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId } = req.params;
       const { override } = req.body;
@@ -880,7 +880,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/forms/:formId/answers", optionalAuth, async (req: Request, res: Response) => {
+  app.put("/api/forms/:formId/answers", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId } = req.params;
       const { answers, signatureData, profileId, fieldOverrides } = req.body;
@@ -1181,7 +1181,7 @@ export async function registerRoutes(
   });
 
   // ============ DOWNLOAD ROUTES ============
-  app.get("/api/forms/:formId/download", optionalAuth, async (req: Request, res: Response) => {
+  app.get("/api/forms/:formId/download", requireFillEntitlement, async (req: Request, res: Response) => {
     try {
       const { formId } = req.params;
       const form = await storage.getForm(formId);
