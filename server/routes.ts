@@ -13,6 +13,7 @@ import { z } from "zod";
 import { extractFieldsFromPdf, getQualityLevel } from "./ocrService";
 import { trackFormProcessing, trackOcrQuality, getMetricsSummary, getDailyMetrics } from "./metricsService";
 import { renderCompletedPdf, getPdfPageCount } from "./pdfRenderer";
+import { computeGenerateHash } from "./generateCache.js";
 import { recordSigningEvent, getAuditTrail, buildEvidenceSummary } from "./esignService";
 import { uploadPdf, downloadPdf, downloadPageImage } from "./objectStorageService.js";
 import { BLOG_POSTS } from "./blogService";
@@ -831,8 +832,22 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Payment required" });
       }
 
-      if (form.status === "completed" && form.generatedPdfPath) {
-        return res.json({ success: true, status: "completed" });
+      // Defect 14: the cached artifact is valid ONLY for the exact
+      // inputs that produced it. Changed answers/signature/fields/
+      // overrides change the hash and force a re-render.
+      const currentGenerateHash = computeGenerateHash({
+        answers: (form.answers || {}) as Record<string, unknown>,
+        signatureData: form.signatureData,
+        fields: form.fieldSchema || [],
+        fieldOverrides: form.fieldOverrides || [],
+      });
+      if (
+        form.status === "completed" &&
+        form.generatedPdfPath &&
+        form.generatedHash &&
+        form.generatedHash === currentGenerateHash
+      ) {
+        return res.json({ success: true, status: "completed", cached: true });
       }
 
       // Generate the PDF
@@ -855,6 +870,7 @@ export async function registerRoutes(
         status: "completed",
         completedAt: new Date(),
         generatedPdfPath: renderResult.generatedPath,
+        generatedHash: currentGenerateHash,
       });
 
       // Send email notification via unified email automation system
@@ -913,9 +929,15 @@ export async function registerRoutes(
         timestamp: new Date().toISOString(),
       };
 
-      const updatedForm = await storage.updateForm(formId, {
+      const overrideUpdate: Record<string, unknown> = {
         fieldOverrides: [...currentOverrides, newOverride],
-      });
+      };
+      if (form.status === "completed") {
+        overrideUpdate.status = "ready";
+        overrideUpdate.generatedPdfPath = null;
+        overrideUpdate.generatedHash = null;
+      }
+      const updatedForm = await storage.updateForm(formId, overrideUpdate as any);
 
       const response = await buildFormResponse(updatedForm);
       res.json(response);
@@ -944,6 +966,15 @@ export async function registerRoutes(
         answers,
         signatureData,
       };
+
+      // Defect 14 (belt and braces): a completed form whose inputs change
+      // goes back to "ready" and drops the stale artifact reference, so a
+      // later generate can never serve the old PDF.
+      if (form.status === "completed") {
+        (updateData as any).status = "ready";
+        (updateData as any).generatedPdfPath = null;
+        (updateData as any).generatedHash = null;
+      }
 
       if (profileId !== undefined) {
         updateData.profileId = profileId;
