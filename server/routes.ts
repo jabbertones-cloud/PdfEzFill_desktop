@@ -79,7 +79,7 @@ function validateProfileBody(body: unknown): { data?: Record<string, unknown>; e
   }
   const unknown = entries.map(([k]) => k).filter((k) => !PROFILE_ALLOWED_FIELDS.has(k));
   if (unknown.length > 0) {
-    return { error: `unexpected field(s): ${unknown.join(", ")}; allowed fields: ${[...PROFILE_ALLOWED_FIELDS].join(", ")}` };
+    return { error: `unexpected field(s): ${unknown.join(", ")}; allowed fields: ${Array.from(PROFILE_ALLOWED_FIELDS).join(", ")}` };
   }
   for (const [key, value] of entries) {
     if ((PROFILE_STRING_FIELDS as readonly string[]).includes(key) && typeof value !== "string") {
