@@ -79,6 +79,19 @@ app.use((req, res, next) => {
   await runDesktopMigrations();
   log('SQLite ready', 'db');
 
+  // 1b. System dependency check: Poppler (pdftoppm) renders PDF pages for
+  // the pipeline. Report its absence clearly and actionably at startup —
+  // never as a cryptic mid-pipeline failure. The server still boots:
+  // native AcroForm extraction works without it, and the paths that need
+  // it surface a named dependency-missing error (see systemDeps.ts).
+  try {
+    const { checkPdftoppm, POPPLER_MISSING_MESSAGE } = await import('./systemDeps.js');
+    const poppler = await checkPdftoppm();
+    log(poppler.available ? 'pdftoppm (Poppler) found' : POPPLER_MISSING_MESSAGE, 'deps');
+  } catch {
+    // A failed dependency check must never block boot.
+  }
+
   // 2. Register all routes (same as SaaS, but auth is bypassed via desktopAuth.ts)
   await registerRoutes(httpServer, app);
 

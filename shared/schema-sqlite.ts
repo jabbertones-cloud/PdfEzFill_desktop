@@ -120,6 +120,8 @@ export const forms = sqliteTable("forms", {
   status: text("status").default("uploaded").notNull(),
   ocrConfidence: real("ocr_confidence"),
   errorMessage: text("error_message"),
+  processingDetails: text("processing_details", { mode: "json" }).$type<{ errorKind?: string; message?: string; degradations?: string[] }>(),
+  generatedHash: text("generated_hash"),
   retryCount: integer("retry_count").default(0),
   isPaid: integer("is_paid", { mode: "boolean" }).default(false),
   paymentType: text("payment_type"),

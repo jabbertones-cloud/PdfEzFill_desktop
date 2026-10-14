@@ -122,6 +122,8 @@ function runInlineSchema(): void {
       status TEXT NOT NULL DEFAULT 'uploaded',
       ocr_confidence REAL,
       error_message TEXT,
+      processing_details TEXT,
+      generated_hash TEXT,
       retry_count INTEGER DEFAULT 0,
       is_paid INTEGER DEFAULT 0,
       payment_type TEXT,
@@ -366,6 +368,15 @@ function runInlineSchema(): void {
     INSERT OR IGNORE INTO users (id, email, first_name, last_name, plan_type, is_admin, created_at, updated_at)
     VALUES ('local-user', 'local@pdfezfill.app', 'Local', 'User', 'pro', 1, unixepoch(), unixepoch());
   `);
+  // Idempotent column adds for databases created before these columns
+  // existed (CREATE TABLE IF NOT EXISTS does not alter existing tables).
+  const formCols = sqlite.prepare("PRAGMA table_info(forms)").all().map((r: any) => r.name);
+  if (!formCols.includes("processing_details")) {
+    sqlite.exec("ALTER TABLE forms ADD COLUMN processing_details TEXT");
+  }
+  if (!formCols.includes("generated_hash")) {
+    sqlite.exec("ALTER TABLE forms ADD COLUMN generated_hash TEXT");
+  }
   console.log('[db] Inline SQLite schema created');
 }
 

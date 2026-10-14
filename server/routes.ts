@@ -124,16 +124,37 @@ async function getQualityMetadata(ocrConfidence: number | null | undefined, fiel
   return { qualityLevel, qualityMessage };
 }
 
+// Structured processing outcome stored on the form (defects 3/4/15):
+// the specific failure kind and any non-fatal degradations, so status
+// surfaces can be honest instead of falling back to a blanket message.
+function getProcessingDetails(form: any): { errorKind: string | null; degradations: string[] } {
+  const d = form?.processingDetails;
+  if (!d || typeof d !== "object") return { errorKind: null, degradations: [] };
+  return {
+    errorKind: typeof d.errorKind === "string" ? d.errorKind : null,
+    degradations: Array.isArray(d.degradations)
+      ? d.degradations.filter((x: any) => typeof x === "string")
+      : [],
+  };
+}
+
 // Helper to build enriched form response with quality metadata
 async function buildFormResponse(form: any): Promise<any> {
   const { qualityLevel, qualityMessage } = await getQualityMetadata(
     form.ocrConfidence,
     form.fieldSchema?.length || 0
   );
+  const { errorKind, degradations } = getProcessingDetails(form);
   return {
     ...form,
     qualityLevel,
-    qualityMessage,
+    // A failed form reports its SPECIFIC stored reason, never the generic
+    // quality ladder (which used to blame "poor scan quality" for every
+    // failure class, including born-digital forms and broken pipelines).
+    qualityMessage:
+      form.status === "error" && form.errorMessage ? form.errorMessage : qualityMessage,
+    errorKind,
+    degradations,
   };
 }
 
@@ -590,6 +611,9 @@ export async function registerRoutes(
               fieldSchema: ocrResult.fields,
               ocrConfidence: ocrResult.averageConfidence,
               status: "ready",
+              processingDetails: ocrResult.degradations?.length
+                ? { degradations: ocrResult.degradations }
+                : undefined,
             });
             console.log(`[upload] OCR complete for form ${formId}: ${ocrResult.fields.length} fields`);
 
@@ -598,9 +622,16 @@ export async function registerRoutes(
             await trackFormProcessing(formId, ocrResult.averageConfidence, processingTimeMs, "success");
             await trackOcrQuality(formId, qualityLevel, ocrResult.averageConfidence);
           } else {
+            const specificReason =
+              ocrResult.error || ocrResult.qualityMessage || "Processing failed";
             await storage.updateForm(formId, {
               status: "error",
               ocrConfidence: 0,
+              errorMessage: specificReason,
+              processingDetails: {
+                errorKind: ocrResult.errorKind || "processing_failed",
+                message: specificReason,
+              },
             });
             console.error(`[upload] OCR failed for form ${formId}:`, ocrResult.error);
 
@@ -639,7 +670,12 @@ export async function registerRoutes(
           }
         } catch (error) {
           console.error(`[upload] Background OCR error for form ${formId}:`, error);
-          await storage.updateForm(formId, { status: "error" });
+          await storage.updateForm(formId, {
+            status: "error",
+            errorMessage:
+              error instanceof Error ? error.message : "Processing failed unexpectedly",
+            processingDetails: { errorKind: "processing_failed" },
+          });
         }
       })();
 
@@ -686,12 +722,16 @@ export async function registerRoutes(
         form.ocrConfidence,
         form.fieldSchema?.length || 0
       );
+      const { errorKind, degradations } = getProcessingDetails(form);
 
       res.json({
         ...form,
         effectiveFields,
         qualityLevel,
-        qualityMessage,
+        qualityMessage:
+          form.status === "error" && form.errorMessage ? form.errorMessage : qualityMessage,
+        errorKind,
+        degradations,
       });
     } catch (error) {
       console.error("Error fetching form:", error);
@@ -755,6 +795,7 @@ export async function registerRoutes(
         form.ocrConfidence,
         form.fieldSchema?.length || 0
       );
+      const { errorKind, degradations } = getProcessingDetails(form);
 
       res.json({
         status: form.status,
@@ -762,7 +803,11 @@ export async function registerRoutes(
         ocrConfidence: form.ocrConfidence,
         pageCount: form.pageCount,
         qualityLevel,
-        qualityMessage,
+        qualityMessage:
+          form.status === "error" && form.errorMessage ? form.errorMessage : qualityMessage,
+        errorMessage: form.errorMessage ?? null,
+        errorKind,
+        degradations,
       });
     } catch (error) {
       console.error("Error fetching form status:", error);

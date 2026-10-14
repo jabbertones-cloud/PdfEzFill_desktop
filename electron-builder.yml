@@ -11,6 +11,11 @@ files:
   - assets/**/*
   - "!**/*.map"
 
+# NOTE (system dependency): the processing pipeline shells out to
+# `pdftoppm` from Poppler, which is NOT bundled with the app. Installers /
+# release notes must tell users to install Poppler (macOS:
+# `brew install poppler`; Debian/Ubuntu: `poppler-utils`). The server
+# detects its absence at startup and reports it by name.
 extraResources:
   - from: server/python
     to: python

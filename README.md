@@ -61,6 +61,23 @@ LICENSE_VALIDATION_URL=http://127.0.0.1:8787/v1/license/validate \
 Copy `.env.example` to `.env` and fill in values when the real backend exists.
 Never commit `.env`.
 
+## System dependencies
+
+- **Poppler (`pdftoppm`)** — required by the processing pipeline to render
+  PDF pages to images (page previews and field detection for scanned
+  forms). It is a *system* dependency, not an npm/pip package:
+  - macOS: `brew install poppler`
+  - Debian/Ubuntu: `sudo apt-get install poppler-utils`
+  - Windows: install Poppler and add its `bin` folder to `PATH`.
+  The server checks for `pdftoppm` at startup and logs a clear,
+  actionable message when it is missing; the affected processing paths
+  report a named `dependency_missing` error instead of failing
+  cryptically mid-pipeline. Native AcroForm field extraction does not
+  need Poppler.
+- **Unicode fill font** — `assets/fonts/NotoSansSC.ttf` (Noto Sans SC,
+  SIL Open Font License 1.1, see `assets/fonts/OFL.txt`) is embedded by
+  the PDF renderer so filled values with non-Latin text render correctly.
+
 ## Docs
 
 - [`docs/INVENTORY.md`](docs/INVENTORY.md) — current state: stack, what's

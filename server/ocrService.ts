@@ -1,5 +1,6 @@
 import type { FormField } from "@shared/schema";
 import { uploadPageImage } from "./objectStorageService";
+import { checkPdftoppm, isPdftoppmMissingError, POPPLER_MISSING_MESSAGE } from "./systemDeps";
 import { PDFDocument } from "pdf-lib";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -75,6 +76,23 @@ export const OCR_THRESHOLDS = {
 
 export type OCRQualityLevel = "high" | "medium" | "low" | "unusable";
 
+// Specific, honest processing-failure kinds (defect 4). "scan_quality" is
+// used ONLY when OCR actually ran and measured a low confidence — never as
+// a blanket message for unrelated failures. "detector_unavailable" and
+// "dependency_missing" describe degraded operation, not a broken form.
+export type ProcessingErrorKind =
+  | "encrypted_pdf"
+  | "corrupt_pdf"
+  | "not_pdf"
+  | "invalid_pdf"
+  | "file_too_large"
+  | "file_too_small"
+  | "too_many_pages"
+  | "dependency_missing"
+  | "detector_unavailable"
+  | "scan_quality"
+  | "processing_failed";
+
 export interface OCRResult {
   success: boolean;
   fields: FormField[];
@@ -83,6 +101,8 @@ export interface OCRResult {
   qualityLevel: OCRQualityLevel;
   qualityMessage: string;
   error?: string;
+  errorKind?: ProcessingErrorKind;
+  degradations?: string[];
   method?: string;
   requiresManualMode?: boolean;
   rawResponses?: any[];
@@ -713,12 +733,20 @@ export function getQualityMessage(level: OCRQualityLevel, fieldCount: number, re
     case "low":
       return `Detected ${fieldCount} fields with low confidence. Please review all fields carefully.`;
     case "unusable":
-      return `Poor scan quality detected. Consider re-uploading a clearer image.`;
+      // Reached only when OCR actually ran and measured near-zero
+      // confidence, or when nothing at all could be detected. State what
+      // was measured; never blame "scan quality" for unrelated failures.
+      return fieldCount === 0
+        ? `No fields could be detected in this document. You can add fields manually using the editor.`
+        : `Detected ${fieldCount} fields, but the measured OCR confidence is very low. Please review all fields carefully.`;
   }
 }
 
-// Diagnostic logger with timestamps
-class OCRLogger {
+// Diagnostic logger with timestamps.
+// Contract: log / warn / error / getLogs. Call sites use all of these —
+// every method named here MUST exist (a missing method once turned a
+// non-critical stage-5 warning into a whole-pipeline failure).
+export class OCRLogger {
   private formId: string;
   private startTime: number;
   private logs: string[] = [];
@@ -736,6 +764,17 @@ class OCRLogger {
       console.log(logLine, data);
     } else {
       console.log(logLine);
+    }
+  }
+
+  warn(message: string, data?: any) {
+    const elapsed = Date.now() - this.startTime;
+    const logLine = `[ocr:${this.formId}] +${elapsed}ms | WARN: ${message}`;
+    this.logs.push(logLine);
+    if (data) {
+      console.warn(logLine, data);
+    } else {
+      console.warn(logLine);
     }
   }
 
@@ -771,7 +810,7 @@ const ERROR_MESSAGES = {
   NO_PAGES: "This PDF has no pages. Please upload a PDF with content.",
   TOO_MANY_PAGES: `This PDF has too many pages (max ${PDF_LIMITS.MAX_PAGES}). You can still use Manual Mode for larger documents.`,
   PAGE_TOO_SMALL: "The page dimensions are too small to process. Please ensure the PDF was created correctly.",
-  PARSE_FAILED: "Unable to read this PDF. It may be password-protected or corrupted. Try re-exporting from the original source.",
+  PARSE_FAILED: "Unable to read this PDF. The file appears to be corrupted or truncated. Try re-exporting it from the original source.",
   ENCRYPTED: "This PDF appears to be password-protected. Please unlock it before uploading.",
 };
 
@@ -780,6 +819,7 @@ interface ValidationResult {
   pageCount: number;
   error?: string;
   errorCode?: string;
+  errorKind?: ProcessingErrorKind;
   pdfDoc?: any;
 }
 
@@ -792,28 +832,38 @@ async function validatePdf(pdfBuffer: Buffer, logger: OCRLogger): Promise<Valida
   
   if (pdfBuffer.length < 100) {
     logger.error("PDF too small - likely corrupted");
-    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.FILE_TOO_SMALL, errorCode: "FILE_TOO_SMALL" };
+    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.FILE_TOO_SMALL, errorCode: "FILE_TOO_SMALL", errorKind: "corrupt_pdf" };
   }
   
   if (fileSizeMB > PDF_LIMITS.MAX_FILE_SIZE_MB) {
     logger.error(`PDF too large: ${fileSizeMB.toFixed(2)}MB > ${PDF_LIMITS.MAX_FILE_SIZE_MB}MB`);
-    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.FILE_TOO_LARGE, errorCode: "FILE_TOO_LARGE" };
+    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.FILE_TOO_LARGE, errorCode: "FILE_TOO_LARGE", errorKind: "file_too_large" };
   }
   
   // Check PDF magic bytes (more thorough than just header)
   const header = pdfBuffer.slice(0, 8).toString('ascii');
   if (!header.startsWith('%PDF-')) {
     logger.error(`Invalid PDF header: ${header.slice(0, 20)}`);
-    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.INVALID_FORMAT, errorCode: "INVALID_FORMAT" };
+    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.INVALID_FORMAT, errorCode: "INVALID_FORMAT", errorKind: "not_pdf" };
   }
   
   try {
-    const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+    let pdfDoc;
+    try {
+      pdfDoc = await PDFDocument.load(pdfBuffer);
+    } catch (loadError: any) {
+      const msg = (loadError?.message || "").toLowerCase();
+      if (msg.includes("encrypt") || msg.includes("password")) {
+        logger.error("PDF is encrypted / password-protected");
+        return { valid: false, pageCount: 0, error: ERROR_MESSAGES.ENCRYPTED, errorCode: "ENCRYPTED", errorKind: "encrypted_pdf" };
+      }
+      throw loadError;
+    }
     const pageCount = pdfDoc.getPageCount();
     
     if (pageCount === 0) {
       logger.error("PDF has no pages");
-      return { valid: false, pageCount: 0, error: ERROR_MESSAGES.NO_PAGES, errorCode: "NO_PAGES" };
+      return { valid: false, pageCount: 0, error: ERROR_MESSAGES.NO_PAGES, errorCode: "NO_PAGES", errorKind: "corrupt_pdf" };
     }
     
     if (pageCount > PDF_LIMITS.MAX_PAGES) {
@@ -822,7 +872,8 @@ async function validatePdf(pdfBuffer: Buffer, logger: OCRLogger): Promise<Valida
         valid: false, 
         pageCount, 
         error: `This PDF has ${pageCount} pages (max ${PDF_LIMITS.MAX_PAGES}). You can still use Manual Mode for larger documents.`,
-        errorCode: "TOO_MANY_PAGES" 
+        errorCode: "TOO_MANY_PAGES",
+        errorKind: "too_many_pages"
       };
     }
     
@@ -832,7 +883,7 @@ async function validatePdf(pdfBuffer: Buffer, logger: OCRLogger): Promise<Valida
     
     if (width < PDF_LIMITS.MIN_PAGE_SIZE_PT || height < PDF_LIMITS.MIN_PAGE_SIZE_PT) {
       logger.error(`Page dimensions too small: ${width}x${height}pt`);
-      return { valid: false, pageCount, error: ERROR_MESSAGES.PAGE_TOO_SMALL, errorCode: "PAGE_TOO_SMALL" };
+      return { valid: false, pageCount, error: ERROR_MESSAGES.PAGE_TOO_SMALL, errorCode: "PAGE_TOO_SMALL", errorKind: "invalid_pdf" };
     }
     
     if (width > PDF_LIMITS.MAX_PAGE_SIZE_PT || height > PDF_LIMITS.MAX_PAGE_SIZE_PT) {
@@ -841,7 +892,8 @@ async function validatePdf(pdfBuffer: Buffer, logger: OCRLogger): Promise<Valida
         valid: false, 
         pageCount, 
         error: "This PDF has unusually large page dimensions. Please try exporting at a standard size.",
-        errorCode: "PAGE_TOO_LARGE" 
+        errorCode: "PAGE_TOO_LARGE",
+        errorKind: "invalid_pdf"
       };
     }
     
@@ -850,13 +902,9 @@ async function validatePdf(pdfBuffer: Buffer, logger: OCRLogger): Promise<Valida
   } catch (error: any) {
     logger.error("Failed to parse PDF", error.message);
     
-    // Check for encryption-related errors
-    const errorStr = error.message?.toLowerCase() || '';
-    if (errorStr.includes('encrypt') || errorStr.includes('password')) {
-      return { valid: false, pageCount: 0, error: ERROR_MESSAGES.ENCRYPTED, errorCode: "ENCRYPTED" };
-    }
-    
-    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.PARSE_FAILED, errorCode: "PARSE_FAILED" };
+    // Encryption was already classified above; anything reaching here is a
+    // genuinely unreadable / corrupt / truncated document.
+    return { valid: false, pageCount: 0, error: ERROR_MESSAGES.PARSE_FAILED, errorCode: "PARSE_FAILED", errorKind: "corrupt_pdf" };
   }
 }
 
@@ -1161,11 +1209,20 @@ async function renderPdfPageToImage(pdfBuffer: Buffer, pageNum: number, logger: 
     createdFiles.push(pdfPath);
 
     logger.log(`Rendering page ${pageNum} with pdftoppm...`);
-    
-    await execAsync(
-      `pdftoppm -png -r 150 -f ${pageNum} -l ${pageNum} "${pdfPath}" "${outputPrefix}"`,
-      { timeout: 30000 }
-    );
+
+    try {
+      await execAsync(
+        `pdftoppm -png -r 150 -f ${pageNum} -l ${pageNum} "${pdfPath}" "${outputPrefix}"`,
+        { timeout: 30000 }
+      );
+    } catch (execError: any) {
+      if (isPdftoppmMissingError(execError)) {
+        // Dependency-missing is a named, actionable error kind — never a
+        // raw "command not found" stack in the middle of the pipeline.
+        throw new Error(POPPLER_MISSING_MESSAGE);
+      }
+      throw execError;
+    }
 
     const files = await fs.promises.readdir(tmpDir);
     const pageFile = files.find(f => 
@@ -1604,6 +1661,7 @@ export async function extractFieldsFromPdf(
       qualityLevel: "unusable",
       qualityMessage: validation.error || "Invalid PDF",
       error: validation.error,
+      errorKind: validation.errorKind || "processing_failed",
       method: "validation_failed",
     };
   }
@@ -1612,6 +1670,12 @@ export async function extractFieldsFromPdf(
   let fields: FormField[] = [];
   let method = "none";
   let pageImagePaths: string[] = [];
+  // Non-fatal problems encountered along the way. Surfaced on the result so
+  // the form status can show them; they never discard good extraction work.
+  const degradations: string[] = [];
+  const noteDegradation = (msg: string) => {
+    if (!degradations.includes(msg)) degradations.push(msg);
+  };
 
   try {
     // Stage 1: Native form field extraction
@@ -1632,7 +1696,12 @@ export async function extractFieldsFromPdf(
             pageImagePaths.push(uploadResult.path || "");
           }
         } catch (error: any) {
-          logger.error(`Failed to render page ${pageNum} image: ${error.message}`);
+          if (isPdftoppmMissingError(error) || (error?.message || "").includes("pdftoppm")) {
+            logger.warn(`Page image rendering unavailable: ${error.message}`);
+            noteDegradation(POPPLER_MISSING_MESSAGE + " Page preview images are unavailable; form fields were still extracted.");
+          } else {
+            logger.error(`Failed to render page ${pageNum} image: ${error.message}`);
+          }
         }
       }
       logger.log(`Generated ${pageImagePaths.length} page images`);
@@ -1720,10 +1789,17 @@ export async function extractFieldsFromPdf(
           logger.log("Auto field detection ran but found no additional fields");
         }
       } catch (err: any) {
+        // NON-CRITICAL means non-critical: log the warning, record the
+        // degradation for the form status, and CONTINUE with the fields
+        // already extracted. (This catch once called a logger method that
+        // did not exist, and the resulting TypeError discarded 199 good
+        // native fields and failed the whole form.)
         logger.warn(
-          `Auto field detection failed (non-critical), continuing with OCR fields: ${err.message}`
+          `Auto field detection failed (non-critical), continuing with ${fields.length} extracted fields: ${err.message}`
         );
-        // Detection failure is non-critical - OCR fields remain valid
+        noteDegradation(
+          `Field auto-detection unavailable (${err.message}). Continuing with ${fields.length} fields from ${method} extraction.`
+        );
       }
     } else if (AUTO_DETECT_ENABLED) {
       logger.log("Stage 5: Auto field detection skipped (no OCR fields yet)");
@@ -1753,6 +1829,7 @@ export async function extractFieldsFromPdf(
       method,
       requiresManualMode,
       pageImagePaths,
+      ...(degradations.length > 0 ? { degradations } : {}),
     };
     
     // Cache successful results (only if we got fields or can offer manual mode)
@@ -1764,15 +1841,20 @@ export async function extractFieldsFromPdf(
     return result;
   } catch (error: any) {
     logger.error("=== HYBRID OCR PIPELINE FAILED ===", error);
-    
+
+    const dependencyMissing =
+      isPdftoppmMissingError(error) || (error?.message || "").includes("pdftoppm");
     return {
       success: false,
       fields: [],
       pageCount,
       averageConfidence: 0,
       qualityLevel: "unusable",
-      qualityMessage: "Failed to process PDF. Please try a different file or add fields manually.",
+      qualityMessage: dependencyMissing
+        ? POPPLER_MISSING_MESSAGE
+        : "Processing failed unexpectedly. Please try a different file or add fields manually.",
       error: error.message || "Unknown error",
+      errorKind: dependencyMissing ? "dependency_missing" : "processing_failed",
       method: "error",
       requiresManualMode: true,
     };
