@@ -146,7 +146,7 @@ export function matchFieldConcept(field: FormField): ConceptMatch | null {
 
   // Other-person guard: a field about a spouse / dependent / emergency
   // contact / etc. must not receive the profile owner's values.
-  const otherPerson = [...allTokens].some((t) => OTHER_PERSON_TOKENS.has(t));
+  const otherPerson = Array.from(allTokens).some((t) => OTHER_PERSON_TOKENS.has(t));
   if (otherPerson) return null;
 
   const foreign = allTokens.has("foreign");
