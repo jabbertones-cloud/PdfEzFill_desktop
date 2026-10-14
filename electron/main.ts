@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import * as fs from 'fs';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
+import { ensureEncryptionSecret } from './encryptionSecret.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // In dev: electron/main.ts is at pdfezfill_desktop/electron/ → APP_ROOT = pdfezfill_desktop/
@@ -55,6 +56,9 @@ async function startExpressServer(port: number): Promise<void> {
       LOCAL_STORAGE_PATH: path.join(app.getPath('userData'), 'storage'),
       // License key storage
       LICENSE_KEY_PATH: path.join(app.getPath('userData'), 'license.json'),
+      // Per-install secret for profile field encryption (server/crypto.ts
+      // throws without it); generated + persisted under userData on first run
+      ENCRYPTION_SECRET: ensureEncryptionSecret(app.getPath('userData'), process.env.ENCRYPTION_SECRET),
     };
 
     if (isDev) {
