@@ -694,3 +694,15 @@ async def detection_capabilities():
         "fallback_chain": available,
         "detection_enabled": DETECTION_AVAILABLE
     }
+
+
+if __name__ == "__main__":
+    # Entrypoint (added 2026-10-14, defect 8e): Electron spawns this file
+    # directly (python3 server/python/ocr_service.py, env OCR_PORT=5050)
+    # and polls GET /health. Without this block the process defined the
+    # FastAPI app and exited immediately, so the sidecar never served.
+    import os
+
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("OCR_PORT", "5050")))
