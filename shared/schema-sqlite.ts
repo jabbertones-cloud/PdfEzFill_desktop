@@ -79,7 +79,11 @@ export const profiles = sqliteTable("profiles", {
 export const formFieldSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.enum(["text", "number", "date", "email", "phone", "checkbox", "radio", "textarea", "signature", "table"]),
+  // The AcroForm field name this extracted field corresponds to, when it
+  // came from a native fillable PDF. The renderer matches on this first;
+  // ids/labels are display-side identifiers and are not reliable keys.
+  acroName: z.string().optional(),
+  type: z.enum(["text", "number", "date", "email", "phone", "checkbox", "radio", "textarea", "signature", "table", "select"]),
   page: z.number(),
   bbox: z.array(z.number()),
   required: z.boolean().optional(),

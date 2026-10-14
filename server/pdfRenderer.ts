@@ -1,4 +1,11 @@
-import { PDFDocument, rgb, StandardFonts, PDFFont, PDFPage } from "pdf-lib";
+import {
+  PDFDocument, rgb, StandardFonts, PDFFont, PDFPage,
+  PDFTextField, PDFCheckBox, PDFRadioGroup, PDFDropdown, PDFOptionList,
+  PDFName, PDFBool,
+} from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
+import * as fs from "fs";
+import * as path from "path";
 import type { FormField, FieldOverride } from "@shared/schema";
 import { downloadPdf, uploadPdf } from "./objectStorageService";
 import { verifyFilledPdf, type VerificationResult } from "./pdfVerification";
@@ -31,6 +38,72 @@ const TEXT_CONFIG = {
   checkmarkSize: 12,
   radioFillSize: 8,
 };
+
+// ── Unicode font (defect 2) ─────────────────────────────────────────────
+// Helvetica/WinAnsi cannot encode accents beyond Latin-1, CJK, or emoji:
+// pdf-lib throws "WinAnsi cannot encode" and generation fails outright.
+// We embed Noto Sans SC (Latin + CJK coverage, SIL OFL 1.1 — see
+// assets/fonts/) and use it for AcroForm appearances and overlays.
+let unicodeFontBytesCache: Buffer | null | undefined;
+
+function loadUnicodeFontBytes(): Buffer | null {
+  if (unicodeFontBytesCache !== undefined) return unicodeFontBytesCache;
+  const candidates = [
+    path.join(__dirname, "assets", "fonts", "NotoSansSC.ttf"),
+    path.join(__dirname, "..", "assets", "fonts", "NotoSansSC.ttf"),
+    path.join(__dirname, "..", "server", "assets", "fonts", "NotoSansSC.ttf"),
+    path.join(process.cwd(), "assets", "fonts", "NotoSansSC.ttf"),
+    path.join(process.cwd(), "server", "assets", "fonts", "NotoSansSC.ttf"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        unicodeFontBytesCache = fs.readFileSync(candidate);
+        return unicodeFontBytesCache;
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+  console.warn("[pdf] Unicode font asset (assets/fonts/NotoSansSC.ttf) not found; falling back to Helvetica appearances + NeedAppearances for non-WinAnsi values");
+  unicodeFontBytesCache = null;
+  return null;
+}
+
+async function embedUnicodeFont(pdfDoc: PDFDocument): Promise<PDFFont | null> {
+  try {
+    const bytes = loadUnicodeFontBytes();
+    if (!bytes) return null;
+    pdfDoc.registerFontkit(fontkit as any);
+    return await pdfDoc.embedFont(bytes, { subset: true });
+  } catch (error) {
+    console.warn("[pdf] Could not embed Unicode font; falling back:", error);
+    return null;
+  }
+}
+
+/** Normalize an AcroForm name / label / id for comparison: case- and
+ * punctuation-insensitive, so "topmostSubform[0].Page1[0].f1_01[0]" and a
+ * label derived from it compare equal. */
+export function normalizeAcroKey(value: string): string {
+  return (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Find the extracted field that corresponds to an AcroForm field name.
+ * The recorded acroName is authoritative; id/label matching is a fallback
+ * for field schemas produced before acroName was recorded. */
+export function findFieldForAcroName(
+  fields: FormField[],
+  acroName: string
+): FormField | undefined {
+  const byAcroName = fields.find((f) => (f as any).acroName === acroName);
+  if (byAcroName) return byAcroName;
+  const key = normalizeAcroKey(acroName);
+  if (!key) return undefined;
+  return fields.find(
+    (f) => normalizeAcroKey(f.id) === key || normalizeAcroKey(f.label || "") === key
+  );
+}
 
 // Calculate optimal font size based on field dimensions and text length
 function calculateOptimalFontSize(
@@ -164,55 +237,84 @@ export async function renderCompletedPdf(options: RenderOptions): Promise<Render
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // ── AcroForm native fill (fillable PDFs) ──────────────────────────────────
-    // Try to fill existing PDF form fields by name before visual overlay.
-    // This ensures Acrobat/Preview shows filled values in the form widget.
+    const finalFields = applyFieldOverrides(fields, fieldOverrides);
+
+    // ── AcroForm native fill (fillable PDFs) ────────────────────────────
+    // Set REAL AcroForm values (/V) via pdf-lib's form API so any reader
+    // (pypdf, Acrobat, Preview) sees the filled values as form data.
+    // The form is NEVER flattened afterwards: flattening destroys the
+    // field values and leaves only a picture behind.
     const acroForm = pdfDoc.getForm();
     const nativelyFilled = new Set<string>();
+    const unicodeFont = await embedUnicodeFont(pdfDoc);
+    const appearanceFont = unicodeFont ?? font;
     try {
       const acroFields = acroForm.getFields();
       for (const acroField of acroFields) {
         const acroName = acroField.getName();
-        // Match by field ID or by field label (case-insensitive)
-        const matchingField = fields.find(
-          (f) =>
-            f.id === acroName ||
-            (f.label && f.label.toLowerCase().replace(/\s+/g, "_") === acroName.toLowerCase().replace(/\s+/g, "_"))
-        );
+        const matchingField = findFieldForAcroName(finalFields, acroName);
         if (!matchingField) continue;
         const answer = answers[matchingField.id];
-        if (!answer) continue;
-        const fieldType = acroField.constructor.name;
+        if (answer === undefined || answer === null || answer === "") continue;
         try {
-          if (fieldType === "PDFTextField") {
-            (acroField as import("pdf-lib").PDFTextField).setText(answer);
+          if (acroField instanceof PDFTextField) {
+            // The value is stored exactly as provided (dates etc. are NOT
+            // reformatted here — /V must round-trip byte-exact).
+            acroField.setText(String(answer));
             nativelyFilled.add(matchingField.id);
-          } else if (fieldType === "PDFCheckBox") {
-            const checked = answer === "true" || answer === "yes" || answer === "1";
-            if (checked) (acroField as import("pdf-lib").PDFCheckBox).check();
-            else (acroField as import("pdf-lib").PDFCheckBox).uncheck();
+          } else if (acroField instanceof PDFCheckBox) {
+            const checked =
+              answer === "true" || answer === "yes" || answer === "1" ||
+              String(answer).toLowerCase() === "on";
+            if (checked) acroField.check();
+            else acroField.uncheck();
             nativelyFilled.add(matchingField.id);
-          } else if (fieldType === "PDFRadioGroup") {
-            (acroField as import("pdf-lib").PDFRadioGroup).select(answer);
+          } else if (acroField instanceof PDFRadioGroup) {
+            acroField.select(String(answer));
             nativelyFilled.add(matchingField.id);
-          } else if (fieldType === "PDFDropdown") {
-            (acroField as import("pdf-lib").PDFDropdown).select(answer);
+          } else if (acroField instanceof PDFDropdown) {
+            acroField.select(String(answer));
+            nativelyFilled.add(matchingField.id);
+          } else if (acroField instanceof PDFOptionList) {
+            acroField.select(String(answer));
             nativelyFilled.add(matchingField.id);
           }
         } catch {
-          // Field fill failed — fall back to visual overlay below
+          // e.g. the answer exceeds the field's maxLength, or a radio /
+          // dropdown answer is not one of its options. The field is left
+          // unfilled natively; text fields fall back to the visual overlay
+          // below. The render as a whole must not fail over one field.
         }
-      }
-      // Flatten AcroForm after fill so visual overlay aligns with filled text
-      if (nativelyFilled.size > 0) {
-        acroForm.flatten();
       }
     } catch {
       // PDF has no AcroForm — visual overlay only
     }
-    // ─────────────────────────────────────────────────────────────────────────
-    
-    const finalFields = applyFieldOverrides(fields, fieldOverrides);
+
+    // Regenerate appearances with the Unicode font so values are VISIBLE.
+    // If appearance generation cannot render some value (e.g. a glyph the
+    // font does not have), the stored /V is still exact: set
+    // NeedAppearances and let the viewer regenerate appearances instead.
+    // Silently altering the string to fit the font is never an option.
+    if (nativelyFilled.size > 0) {
+      try {
+        acroForm.updateFieldAppearances(appearanceFont);
+      } catch (appearanceError) {
+        console.warn(
+          "[pdf] Appearance generation fell back to NeedAppearances:",
+          appearanceError
+        );
+        try {
+          const acroDict = pdfDoc.context.lookup(
+            pdfDoc.catalog.get(PDFName.of("AcroForm"))
+          ) as any;
+          acroDict?.set(PDFName.of("NeedAppearances"), PDFBool.True);
+        } catch {
+          // Nothing more to do — values are stored regardless.
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     
     for (const field of finalFields) {
       const answer = answers[field.id];
@@ -243,14 +345,16 @@ export async function renderCompletedPdf(options: RenderOptions): Promise<Render
       } else if (field.type === "signature") {
         // Signatures are handled separately below
       } else {
+       try {
         // Format date values
         let text = String(answer);
         if (field.type === "date") {
           text = formatDateValue(text);
         }
         
-        // Calculate optimal font size
-        const fontSize = calculateOptimalFontSize(text, fieldWidth, fieldHeight, font);
+        // Calculate optimal font size (measured with the Unicode font so
+        // non-Latin answers are laid out — and encoded — correctly)
+        const fontSize = calculateOptimalFontSize(text, fieldWidth, fieldHeight, appearanceFont);
         
         if (field.type === "textarea" || text.length > 50) {
           // Multi-line text rendering
@@ -261,7 +365,7 @@ export async function renderCompletedPdf(options: RenderOptions): Promise<Render
           
           for (const word of words) {
             const testLine = currentLine ? `${currentLine} ${word}` : word;
-            const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+            const testWidth = appearanceFont.widthOfTextAtSize(testLine, fontSize);
             
             if (testWidth <= maxWidth) {
               currentLine = testLine;
@@ -282,7 +386,7 @@ export async function renderCompletedPdf(options: RenderOptions): Promise<Render
               x: x + TEXT_CONFIG.padding,
               y: lineY,
               size: fontSize,
-              font: font,
+              font: appearanceFont,
               color: rgb(0, 0, 0),
             });
             lineY -= lineSpacing;
@@ -293,10 +397,13 @@ export async function renderCompletedPdf(options: RenderOptions): Promise<Render
             x: x + TEXT_CONFIG.padding,
             y: y + (fieldHeight - fontSize) / 2,
             size: fontSize,
-            font: font,
+            font: appearanceFont,
             color: rgb(0, 0, 0),
           });
         }
+       } catch (overlayError) {
+          console.warn(`[pdf] Overlay skipped for field ${field.id}:`, overlayError);
+       }
       }
     }
     

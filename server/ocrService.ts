@@ -936,11 +936,12 @@ async function extractNativeFormFields(pdfBuffer: Buffer, pdfDoc: any, logger: O
       const name = field.getName();
       const type = field.constructor.name;
       
+      const typeName = type.toLowerCase();
       let fieldType: string = "text";
-      if (type.includes("Checkbox")) fieldType = "checkbox";
-      else if (type.includes("Radio")) fieldType = "radio";
-      else if (type.includes("Dropdown") || type.includes("OptionList")) fieldType = "select";
-      else if (type.includes("Signature")) fieldType = "signature";
+      if (typeName.includes("checkbox")) fieldType = "checkbox";
+      else if (typeName.includes("radio")) fieldType = "radio";
+      else if (typeName.includes("dropdown") || typeName.includes("optionlist")) fieldType = "select";
+      else if (typeName.includes("signature")) fieldType = "signature";
       
       // Get widget annotations for position
       const widgets = field.acroField.getWidgets();
@@ -978,6 +979,7 @@ async function extractNativeFormFields(pdfBuffer: Buffer, pdfDoc: any, logger: O
       return {
         id: `field_native_${index}`,
         label: name || `Field ${index + 1}`,
+        acroName: name || undefined,
         type: fieldType,
         page,
         bbox,
