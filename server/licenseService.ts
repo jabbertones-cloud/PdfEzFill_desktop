@@ -222,12 +222,52 @@ export function isLicensed(): boolean {
 
 // ─── Grace period: allow 3 trial PDFs without license ────────────────────
 export function getTrialUsageCount(): number {
+  // Defect 10: trial is consumed only when a form's processing completes
+  // successfully. In this codebase that is status 'ready' (OCR finished);
+  // 'completed' forms passed through 'ready' before generation, so they
+  // still count. Upload attempts, in-flight 'processing' forms, and failed
+  // ('error') forms never consume trial.
   try {
     const row = sqlite.prepare(
-      "SELECT COUNT(*) as cnt FROM forms WHERE user_id = 'local-user'"
-    ).get() as any;
+      "SELECT COUNT(*) as cnt FROM forms WHERE user_id = ? AND status IN ('ready', 'completed')"
+    ).get('local-user') as any;
     return row?.cnt ?? 0;
   } catch { return 0; }
+}
+
+// Forms whose processing has started but not yet resolved. Used only by the
+// fill-entitlement gate so parallel in-flight fills cannot oversubscribe the
+// trial; they do NOT count as trial usage (see getTrialUsageCount).
+export function getPendingFormCount(): number {
+  try {
+    const row = sqlite.prepare(
+      "SELECT COUNT(*) as cnt FROM forms WHERE user_id = ? AND status IN ('processing', 'uploaded')"
+    ).get('local-user') as any;
+    return row?.cnt ?? 0;
+  } catch { return 0; }
+}
+
+// Defect 11 helper: is this existing form inside the trial allowance?
+// A form that has not successfully processed yet consumes nothing, so it is
+// allowed (its generate/download cannot produce value before 'ready', and
+// once it is 'ready' this same check applies). A 'ready'/'completed' form
+// is allowed iff it is among the first TRIAL_LIMIT successfully processed
+// forms (by insertion order). Unknown form ids are allowed through so the
+// route handler can answer 404. Fails closed on a storage error.
+export function isFormWithinTrial(formId: string): boolean {
+  try {
+    const self = sqlite.prepare(
+      'SELECT rowid AS rid, status FROM forms WHERE id = ?'
+    ).get(formId) as any;
+    if (!self) return true;
+    if (self.status !== 'ready' && self.status !== 'completed') return true;
+    const prior = sqlite.prepare(
+      "SELECT COUNT(*) as cnt FROM forms WHERE user_id = ? AND status IN ('ready', 'completed') AND rowid < ?"
+    ).get('local-user', self.rid) as any;
+    return (prior?.cnt ?? 0) < TRIAL_LIMIT;
+  } catch {
+    return false;
+  }
 }
 
 export const TRIAL_LIMIT = 3;
