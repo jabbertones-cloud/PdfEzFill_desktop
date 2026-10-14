@@ -512,3 +512,105 @@ export function decodeRegionType(id: number): RegionType {
   if (!found) throw new Error(`Unknown region type ID: ${id}`);
   return found[0] as RegionType;
 }
+
+// ─── System metrics (added 2026-10-14, defect 8a) ─────────────────────────────
+// server/metricsService.ts imports systemMetrics from @shared/schema, which
+// re-exports this file; the table was missing here, so every metrics import
+// resolved to undefined. SQLite port of the web (pg) system_metrics table.
+export const systemMetrics = sqliteTable("system_metrics", {
+  id: text("id").primaryKey().$defaultFn(uuidDefault),
+  date: integer("date", { mode: "timestamp" }).notNull(),
+  metricType: text("metric_type").notNull(),
+  totalCount: integer("total_count").default(0),
+  successCount: integer("success_count").default(0),
+  failureCount: integer("failure_count").default(0),
+  avgValue: real("avg_value"),
+  minValue: real("min_value"),
+  maxValue: real("max_value"),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, any>>(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+}, (table) => [index("IDX_system_metrics_date_type").on(table.date, table.metricType)]);
+export const insertSystemMetricsSchema = createInsertSchema(systemMetrics).omit({ id: true, createdAt: true, updatedAt: true });
+export type SystemMetric = typeof systemMetrics.$inferSelect;
+export type InsertSystemMetric = z.infer<typeof insertSystemMetricsSchema>;
+
+// ─── Email sequence steps / events / enrollments (added 2026-10-14, defect 8a) ──
+// server/emailAutomation.ts imports these tables and types from
+// @shared/schema; they were missing from this SQLite schema, so the module
+// could not typecheck and db.query.* had no such relations. SQLite ports of
+// the web (pg) tables, plus the enrollment progress columns the desktop
+// consumer actually writes (enrolledAt, currentStepOrder, nextStepAt,
+// emailsSent, lastProcessedAt). The pre-existing email tables in this file
+// are slim desktop stubs, so these are metadata for import resolution; the
+// desktop routes use emailAutomation-desktop.ts no-op stubs at runtime.
+export const emailSequenceSteps = sqliteTable("email_sequence_steps", {
+  id: text("id").primaryKey().$defaultFn(uuidDefault),
+  sequenceId: text("sequence_id").notNull().references(() => emailSequences.id),
+  templateId: text("template_id").notNull().references(() => emailTemplates.id),
+  stepOrder: integer("step_order").notNull(),
+  delayMinutes: integer("delay_minutes").default(0),
+  delayDays: integer("delay_days").default(0),
+  conditions: text("conditions", { mode: "json" }).$type<Record<string, any>>(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+export const insertEmailSequenceStepSchema = createInsertSchema(emailSequenceSteps).omit({ id: true, createdAt: true });
+export type EmailSequenceStep = typeof emailSequenceSteps.$inferSelect;
+export type InsertEmailSequenceStep = z.infer<typeof insertEmailSequenceStepSchema>;
+
+export const emailEvents = sqliteTable("email_events", {
+  id: text("id").primaryKey().$defaultFn(uuidDefault),
+  queueId: text("queue_id").references(() => emailQueue.id),
+  userId: text("user_id").references(() => users.id),
+  email: text("email").notNull(),
+  mailerSendMessageId: text("mailersend_message_id"),
+  eventType: text("event_type").notNull(),
+  eventData: text("event_data", { mode: "json" }).$type<Record<string, any>>(),
+  clickedUrl: text("clicked_url"),
+  userAgent: text("user_agent"),
+  ipAddress: text("ip_address"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+}, (table) => [
+  index("IDX_email_events_user").on(table.userId),
+  index("IDX_email_events_message").on(table.mailerSendMessageId),
+]);
+export const insertEmailEventSchema = createInsertSchema(emailEvents).omit({ id: true, createdAt: true });
+export type EmailEvent = typeof emailEvents.$inferSelect;
+export type InsertEmailEvent = z.infer<typeof insertEmailEventSchema>;
+
+export const sequenceEnrollments = sqliteTable("sequence_enrollments", {
+  id: text("id").primaryKey().$defaultFn(uuidDefault),
+  userId: text("user_id").references(() => users.id),
+  email: text("email").notNull(),
+  sequenceId: text("sequence_id").notNull().references(() => emailSequences.id),
+  currentStepId: text("current_step_id").references(() => emailSequenceSteps.id),
+  currentStepOrder: integer("current_step_order").default(0),
+  status: text("status").default("active").notNull(),
+  enrolledAt: integer("enrolled_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  nextStepAt: integer("next_step_at", { mode: "timestamp" }),
+  emailsSent: integer("emails_sent").default(0),
+  startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  lastEmailSentAt: integer("last_email_sent_at", { mode: "timestamp" }),
+  lastProcessedAt: integer("last_processed_at", { mode: "timestamp" }),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, any>>(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+}, (table) => [
+  index("IDX_sequence_enrollments_user").on(table.userId),
+  index("IDX_sequence_enrollments_sequence").on(table.sequenceId),
+  index("IDX_sequence_enrollments_status").on(table.status),
+]);
+export const insertSequenceEnrollmentSchema = createInsertSchema(sequenceEnrollments).omit({ id: true, createdAt: true });
+export type SequenceEnrollment = typeof sequenceEnrollments.$inferSelect;
+export type InsertSequenceEnrollment = z.infer<typeof insertSequenceEnrollmentSchema>;
+
+// Derived types for the pre-existing email tables (also missing, defect 8a):
+// emailAutomation.ts imports EmailTemplate / InsertEmailTemplate and
+// EmailQueueItem / InsertEmailQueueItem from @shared/schema.
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+export const insertEmailQueueSchema = createInsertSchema(emailQueue).omit({ id: true, createdAt: true });
+export type EmailQueueItem = typeof emailQueue.$inferSelect;
+export type InsertEmailQueueItem = z.infer<typeof insertEmailQueueSchema>;
