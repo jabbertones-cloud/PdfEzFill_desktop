@@ -14,7 +14,7 @@
     "build": "npm run build:main && npm run build:renderer && npm run build:server",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build --config vite.renderer.config.ts",
-    "build:server": "tsx script/build.ts",
+    "build:server": "tsx scripts/build.ts",
     "dmg": "npm run build && electron-builder --mac dmg",
     "dmg:local": "npm run build && electron-builder --mac dmg --publish never",
     "start": "cross-env NODE_ENV=production electron .",

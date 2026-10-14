@@ -31,6 +31,9 @@ async function main() {
       'electron',
       // Vite is only needed in dev mode (setupVite is behind an if-check)
       'vite',
+      // Cloud-only dynamic import in stripeClient.getStripeSync(); the
+      // desktop server never calls it (see server/index-desktop.ts header)
+      'stripe-replit-sync',
       '@vitejs/plugin-react',
     ],
     sourcemap: true,
@@ -42,8 +45,10 @@ async function main() {
     },
     define: {
       'import.meta.dirname': '__dirname',
-      'import.meta.url': '__filename',
+      'import.meta.url': '__importMetaUrl',
     },
+    // file:// URL of the bundle itself, for import.meta.url consumers
+    banner: { js: "const __importMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
     logLevel: 'info',
   });
 
