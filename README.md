@@ -4,13 +4,14 @@ Desktop Mac companion app for **PdfEzFill** — the AI-assisted PDF autofill pro
 Users fill PDFs offline in a native-feeling desktop shell; licensing and
 entitlement are validated against the PdfEzFill web backend (Stripe).
 
-> **Repository state (2026-09-23):** this repo currently holds an **incomplete
-> snapshot** — one commit (`bcb3fdc`, "push all code", 2026-03-16) containing
-> Syncthing temporary artifacts (`.syncthing.*.tmp`) instead of the real source
-> tree. There is no `package.json`, no desktop shell (Electron/Tauri/Swift),
-> no build, no tests, and no CI on `main`. **Nothing here is shippable yet.**
-> See [`docs/INVENTORY.md`](docs/INVENTORY.md) for the full inventory and what
-> must be restored before any build work can start.
+> **Repository state (2026-10-14):** the application source tree has been
+> **restored** from the claw-architect monorepo, commit `f823c0b3`
+> (`pdfezfill_desktop`, 208 files, byte-exact). The scaffold snapshot that
+> previously occupied this repo is preserved in git history (parent commit)
+> and its non-colliding record files (`docs/`, `tests/`, `qa/`,
+> `scripts/license-stub.mjs`) remain in the tree. See
+> [`docs/INVENTORY.md`](docs/INVENTORY.md) for the pre-restore inventory.
+
 
 ## Intended architecture (reconstructed from the snapshot)
 
