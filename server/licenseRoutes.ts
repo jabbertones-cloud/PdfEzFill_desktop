@@ -41,25 +41,32 @@ export function registerLicenseRoutes(app: Express): void {
       return res.status(400).json({ message: 'licenseKey and email are required' });
     }
 
-    const result = await activateLicense(licenseKey, email);
+    // Activation must never take the server down (defects 12/13): any
+    // unexpected error becomes a typed JSON response, not a crash.
+    try {
+      const result = await activateLicense(licenseKey, email);
 
-    if (!result.success) {
-      return res.status(400).json({ message: result.message });
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+
+      res.json({ message: result.message, license: result.info });
+    } catch (err: any) {
+      console.error('[license] Activation failed unexpectedly:', err);
+      res.status(500).json({ message: 'License activation failed due to an internal error. No license was activated.' });
     }
-
-    res.json({ message: result.message, license: result.info });
   });
 
   // ─── POST /api/license/deactivate ───────────────────────────────────────
   app.post('/api/license/deactivate', (_req: Request, res: Response) => {
     try {
-      sqlite.exec(`
+      sqlite.prepare(`
         UPDATE license SET
           validation_status = 'deactivated',
           license_key = NULL,
           activated_email = NULL
-        WHERE id = 1
-      `);
+        WHERE id = ?
+      `).run(1);
       res.json({ message: 'License deactivated. You can reactivate on a new machine.' });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
