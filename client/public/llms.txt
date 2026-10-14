@@ -1,0 +1,84 @@
+# AutoFillPDF
+
+> AutoFillPDF is an online tool that converts any PDF form (including scanned, non-fillable, or image-based PDFs) into a clean web form, allows users to fill it digitally with optional autofill from saved profiles, add signatures, and download a completed PDF with answers overlaid on the original document.
+
+## What AutoFillPDF Does
+
+AutoFillPDF eliminates the need for printing, handwriting, and scanning PDF forms. Users upload any PDF form, fill out a clean web form interface, add their signature using a built-in signature pad, and download the completed document ready for submission.
+
+## Key Features
+
+- Works with ANY PDF: scanned documents, photos of forms, non-fillable PDFs, image-based forms
+- OCR-powered field detection that reads text from images
+- Clean web form interface for easy filling
+- Built-in signature pad - sign directly in browser
+- One-click autofill from saved profiles (Pro feature)
+- 256-bit encryption for data security
+- Automatic file deletion (72 hours for guests, 180 days for Pro)
+
+## Pricing
+
+- **Guest (One-time)**: $5 per form, no account required
+- **Starter**: $7/month - 2 forms included, 1 saved profile, extra forms $2 each
+- **Pro+**: $15/month - 10 forms included, multiple profiles, priority processing, extra forms $2 each
+- **Enterprise**: $49/month - 50 forms included, unlimited team members, bulk processing, extra forms $1.50 each
+
+Founding Member rates through January 2026. Cancel anytime.
+
+## How It Works
+
+1. **Upload**: Drag and drop any PDF form - even scanned or image-based
+2. **Fill**: Type answers in a clean web form, add signature
+3. **Download**: Get completed PDF with answers perfectly placed
+
+## Common Use Cases
+
+### HR & Employment
+- I-9 Employment Eligibility Verification
+- W-4 Employee Withholding
+- W-9 Tax ID forms
+- New hire onboarding packets
+- Employee handbook acknowledgments
+- Benefits enrollment forms
+
+### Real Estate
+- Lease agreements and rental applications
+- Purchase contracts and disclosures
+- Property inspection reports
+- HOA documents
+
+### Legal & Contracts
+- Court filings and legal forms
+- Contracts and agreements
+- Power of attorney documents
+- Notary forms
+
+### Healthcare
+- Patient intake forms
+- Medical history questionnaires
+- Insurance claim forms
+- HIPAA authorization forms
+
+### Education
+- School enrollment and registration
+- Permission slips and consent forms
+- Financial aid applications
+
+### Government & Nonprofit
+- Grant applications
+- Permit applications
+- License renewals
+- Compliance forms
+
+## Documentation
+
+- [Privacy Policy](https://autofilllpdf.com/privacy): Data handling and privacy practices
+- [Terms of Service](https://autofilllpdf.com/terms): Usage terms and conditions
+- [Refund Policy](https://autofilllpdf.com/refund): 30-day satisfaction guarantee
+- [Contact & Support](https://autofilllpdf.com/contact): Get help or send feedback
+
+## Contact
+
+- Website: https://autofilllpdf.com
+- Contact Form: https://autofilllpdf.com/contact
+- Support: support@autofilllpdf.com

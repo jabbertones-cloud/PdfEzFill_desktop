@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-03-14T20:27:36.929Z",
+  "timestamp": "2026-03-14T07:34:00.117Z",
   "mode": "fast",
   "appRoot": "/Users/tatsheen/claw-architect/pdfezfill_desktop",
-  "total_duration_ms": 3877,
+  "total_duration_ms": 9414,
   "overall_status": "FAIL",
   "layers": [
     {
@@ -16,7 +16,7 @@
     {
       "layer": "unit",
       "status": "fail",
-      "duration_ms": 3875,
+      "duration_ms": 9411,
       "findings": 0,
       "critical": 0,
       "details": "0 passed, 0 failed. Exit code 1."

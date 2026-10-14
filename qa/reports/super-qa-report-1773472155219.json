@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-03-14T07:09:15.211Z",
+  "mode": "full",
+  "appRoot": "/Users/tatsheen/claw-architect/pdfezfill_desktop",
+  "total_duration_ms": 1,
+  "overall_status": "PASS",
+  "layers": [
+    {
+      "layer": "static",
+      "status": "skip",
+      "duration_ms": 1,
+      "findings": 0,
+      "critical": 0,
+      "details": "Semgrep not configured (qa/semgrep/run-semgrep.sh missing)"
+    }
+  ],
+  "summary": {
+    "total_layers": 1,
+    "passed": 0,
+    "failed": 0,
+    "warned": 0,
+    "skipped": 1,
+    "total_findings": 0,
+    "total_critical": 0
+  }
+}

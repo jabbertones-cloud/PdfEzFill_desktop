@@ -1,0 +1,19 @@
+# Robots.txt for autofilllpdf.com
+# Allow all crawlers to access public pages, block private/API areas
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api
+Disallow: /fill
+Disallow: /download
+Disallow: /dashboard
+
+# Sitemap location
+Sitemap: https://autofilllpdf.com/sitemap.xml
+
+# LLMs.txt for AI search optimization
+# See: https://autofilllpdf.com/llms.txt
+
+# Host
+Host: autofilllpdf.com

@@ -33,3 +33,10 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# restored-tree runtime artifacts (added 2026-10-14 restore)
+test-storage/
+*.db
+*.db-shm
+*.db-wal
+!.env.example
