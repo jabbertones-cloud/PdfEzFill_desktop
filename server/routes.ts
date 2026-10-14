@@ -302,6 +302,14 @@ export async function registerRoutes(
   app.post("/api/profiles", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req)!;
+
+      // Validate before the plan-limit check so malformed input always
+      // fails with the specific validation error (defect 9b).
+      const validated = validateProfileBody(req.body);
+      if (validated.error) {
+        return res.status(400).json({ message: `Invalid profile: ${validated.error}` });
+      }
+
       const user = await storage.getUser(userId);
 
       // Check profile limits based on plan
@@ -312,11 +320,6 @@ export async function registerRoutes(
         return res.status(400).json({ 
           message: `Your plan allows up to ${maxProfiles} profile(s). Upgrade to add more.` 
         });
-      }
-
-      const validated = validateProfileBody(req.body);
-      if (validated.error) {
-        return res.status(400).json({ message: `Invalid profile: ${validated.error}` });
       }
 
       const profile = await storage.createProfile({
