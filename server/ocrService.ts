@@ -9,7 +9,7 @@ import * as os from "os";
 import * as path from "path";
 import * as crypto from "crypto";
 
-// OCR Engine Service - Surya/MMOCR integration
+// OCR Engine Service - Tesseract OCR sidecar integration
 import {
   extractFieldsFromImage,
   extractLayoutFromImage,
@@ -997,11 +997,11 @@ async function extractNativeFormFields(pdfBuffer: Buffer, pdfDoc: any, logger: O
 }
 
 // ============================================================================
-// STAGE 2: Surya OCR - Open-Source Alternative
+// STAGE 2: Tesseract OCR (via the Python sidecar)
 // ============================================================================
-// Uses Surya OCR microservice for text extraction with fallback to Tesseract
+// Uses the Tesseract OCR microservice (Python sidecar) for text extraction
 
-async function extractWithSurya(
+async function extractWithTesseract(
   pdfBuffer: Buffer,
   pageCount: number,
   formId: string,
@@ -1019,11 +1019,11 @@ async function extractWithSurya(
     // Check if OCR service is available
     const isHealthy = await checkOCRServiceHealth();
     if (!isHealthy) {
-      logger.error("Surya OCR service is not available");
+      logger.error("Tesseract OCR service is not available");
       return { fields, pageImagePaths, detectedFormType };
     }
 
-    logger.log("Extracting with Surya OCR...");
+    logger.log("Extracting with Tesseract OCR...");
 
     // Process each page
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
@@ -1031,13 +1031,13 @@ async function extractWithSurya(
         // Render page to image
         const imageBuffer = await renderPdfPageToImage(pdfBuffer, pageNum, logger);
 
-        // Extract fields using Surya - already in correct FormField format
+        // Extract fields using Tesseract - already in correct FormField format
         const pageFields = await extractFieldsFromImage(imageBuffer, pageNum);
 
         // Add to results (already converted to correct FormField format in ocrEngineService)
         fields.push(...pageFields);
 
-        logger.log(`Surya extracted ${pageFields.length} fields from page ${pageNum}`);
+        logger.log(`Tesseract extracted ${pageFields.length} fields from page ${pageNum}`);
 
         // Upload page image for visual editor
         try {
@@ -1049,13 +1049,13 @@ async function extractWithSurya(
           logger.warn(`Failed to upload page ${pageNum} image: ${uploadErr.message}`);
         }
       } catch (pageError: any) {
-        logger.warn(`Surya extraction failed for page ${pageNum}: ${pageError.message}`);
+        logger.warn(`Tesseract extraction failed for page ${pageNum}: ${pageError.message}`);
         // Continue to next page
       }
     }
 
     if (fields.length > 0) {
-      logger.log(`Surya OCR SUCCESS: extracted ${fields.length} fields from ${pageCount} pages`);
+      logger.log(`Tesseract OCR SUCCESS: extracted ${fields.length} fields from ${pageCount} pages`);
     }
 
     return {
@@ -1064,7 +1064,7 @@ async function extractWithSurya(
       detectedFormType,
     };
   } catch (error: any) {
-    logger.error(`Surya OCR failed: ${error.message}`);
+    logger.error(`Tesseract OCR failed: ${error.message}`);
     return { fields: [], pageImagePaths, detectedFormType };
   }
 }
@@ -1072,7 +1072,7 @@ async function extractWithSurya(
 // STAGE 3: GPT-4o Vision API with Retry & Circuit Breaker
 // ============================================================================
 // Uses form-type-specific prompts via buildVisionPrompt() for better accuracy
-// Now demoted to secondary fallback after Surya
+// Now demoted to secondary fallback after the Tesseract sidecar stage
 
 // Coordinate validation constants
 const VALIDATION = {
@@ -1708,23 +1708,29 @@ export async function extractFieldsFromPdf(
       }
       logger.log(`Generated ${pageImagePaths.length} page images`);
     } else {
-      // Stage 2: Surya OCR - Open-source alternative (PRIMARY)
-      logger.log("Stage 1 failed, trying Surya OCR...");
-      const ocrEngine = process.env.OCR_ENGINE || "surya";
+      // Stage 2: Tesseract OCR via the Python sidecar (PRIMARY fallback)
+      logger.log("Stage 1 failed, trying Tesseract OCR...");
+      const ocrEngine = (process.env.OCR_ENGINE || "tesseract").toLowerCase();
 
-      if (ocrEngine === "surya") {
-        try {
-          const suryaResult = await extractWithSurya(pdfBuffer, pageCount, formId, logger);
-          fields = suryaResult.fields;
-          pageImagePaths = suryaResult.pageImagePaths;
+      // The sidecar runs Tesseract only; any OCR_ENGINE value other than
+      // "tesseract" is unrecognized — say so and use Tesseract anyway
+      // rather than silently skipping the stage.
+      if (ocrEngine !== "tesseract") {
+        logger.warn(
+          `OCR_ENGINE="${ocrEngine}" is not a selectable engine; the OCR sidecar runs Tesseract. Using Tesseract.`
+        );
+      }
+      try {
+        const tesseractResult = await extractWithTesseract(pdfBuffer, pageCount, formId, logger);
+        fields = tesseractResult.fields;
+        pageImagePaths = tesseractResult.pageImagePaths;
 
-          if (fields.length > 0) {
-            method = "surya_ocr";
-            logger.log(`Stage 2 SUCCESS: ${fields.length} Surya OCR fields`);
-          }
-        } catch (error: any) {
-          logger.warn(`Surya OCR extraction failed: ${error.message}`);
+        if (fields.length > 0) {
+          method = "tesseract_ocr";
+          logger.log(`Stage 2 SUCCESS: ${fields.length} Tesseract OCR fields`);
         }
+      } catch (error: any) {
+        logger.warn(`Tesseract OCR extraction failed: ${error.message}`);
       }
 
       // Stage 3: Vision API (SECONDARY fallback)

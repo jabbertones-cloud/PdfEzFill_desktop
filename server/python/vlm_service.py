@@ -8,7 +8,7 @@ Priority chain:
 3. Fallback: structured OCR only (no VLM)
 
 The VLM is only called when OCR + layout detection produces ambiguous results.
-Most forms (80%+) are handled by Surya OCR alone without needing VLM.
+Most forms (80%+) are handled by Tesseract OCR alone without needing VLM.
 """
 
 import os

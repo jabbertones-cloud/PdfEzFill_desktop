@@ -4,7 +4,7 @@ Smart extraction pipeline that runs cheap OCR first, only invokes VLM when struc
 
 Pipeline:
 1. OpenCV preprocess (noise reduction, contrast, deskew)
-2. Surya OCR (fast, accurate text detection + recognition)
+2. Tesseract OCR (text recognition via pytesseract)
 3. Layout analysis (bounding boxes, field detection)
 4. IF structure unclear (confidence < threshold, few fields detected):
    → VLM analysis (Qwen-VL or LLaVA for ambiguous regions)
@@ -22,14 +22,19 @@ from io import BytesIO
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
 
-# For Surya OCR
+# OCR engine: Tesseract, driven via pytesseract. This is the only engine
+# this service runs — an earlier revision imported a different OCR
+# library at module load but never called it, and mislabeled the stage
+# after that library. Names here describe what actually executes.
 try:
-    from surya.ocr import run_ocr
-    from surya.model_list import RECOGNITION_MODELS, DETECTION_MODELS
-    SURYA_AVAILABLE = True
+    import pytesseract  # noqa: F401
+    TESSERACT_AVAILABLE = True
 except ImportError:
-    SURYA_AVAILABLE = False
-    logging.warning("Surya OCR not installed. Run: pip install surya-ocr")
+    TESSERACT_AVAILABLE = False
+    logging.warning(
+        "pytesseract not installed. Run: pip install pytesseract "
+        "(and install the tesseract binary)"
+    )
 
 # VLM service
 from vlm_service import (
@@ -73,7 +78,7 @@ class OCRService:
     """Smart OCR service with VLM fallback"""
 
     def __init__(self):
-        self.surya_available = SURYA_AVAILABLE
+        self.tesseract_available = TESSERACT_AVAILABLE
         self.vlm_service_available = True  # Will check at runtime
         self.detection_model = None
         self.recognition_model = None
@@ -81,13 +86,12 @@ class OCRService:
 
     async def initialize(self):
         """Initialize models (async)"""
-        if self.surya_available:
-            try:
-                # Lazy load Surya models on first use
-                self.logger.info("Surya OCR initialized (lazy load)")
-            except Exception as e:
-                self.logger.error(f"Failed to initialize Surya: {e}")
-                self.surya_available = False
+        if self.tesseract_available:
+            self.logger.info("Tesseract OCR engine available (pytesseract)")
+        else:
+            self.logger.warning(
+                "Tesseract OCR engine NOT available — OCR extraction will fail"
+            )
 
         # Check VLM availability
         vlm_status = await check_vlm_available()
@@ -132,8 +136,8 @@ class OCRService:
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             return image if image is not None else np.zeros((100, 100, 3), dtype=np.uint8)
 
-    async def extract_with_surya(self, image_bytes: bytes) -> Dict[str, Any]:
-        """Extract text and layout using Surya OCR
+    async def extract_with_tesseract(self, image_bytes: bytes) -> Dict[str, Any]:
+        """Extract text using Tesseract OCR (via pytesseract).
 
         Args:
             image_bytes: Raw image bytes
@@ -144,81 +148,71 @@ class OCRService:
                 "text": str,
                 "fields": List[FormField],
                 "avg_confidence": float,
-                "detection_results": raw detection results
+                "detection_results": raw tesseract word data,
+                "method": "tesseract",
             }
         """
-        if not self.surya_available:
+        if not self.tesseract_available:
             return {
                 "success": False,
                 "text": "",
                 "fields": [],
                 "avg_confidence": 0.0,
-                "error": "Surya OCR not installed",
+                "error": "Tesseract OCR not available (install pytesseract and the tesseract binary)",
             }
 
         try:
-            # Preprocess image
-            preprocessed = self.preprocess_image(image_bytes)
+            import pytesseract
+            from PIL import Image
 
-            # Encode back to bytes for Surya
-            _, img_bytes = cv2.imencode(".png", preprocessed)
-            processed_bytes = img_bytes.tobytes()
+            pil_image = Image.open(BytesIO(image_bytes))
+            text = pytesseract.image_to_string(pil_image)
+            data = pytesseract.image_to_data(
+                pil_image, output_type=pytesseract.Output.DICT
+            )
 
-            # Run Surya OCR (simplified - in production would use full pipeline)
-            # For now, we'll do a basic fallback using pytesseract if Surya needs complex setup
-            try:
-                import pytesseract
-                from PIL import Image
+            # Extract fields from tesseract word data
+            fields = []
+            confidences = []
 
-                # Quick fallback: use pytesseract if Surya unavailable
-                pil_image = Image.open(BytesIO(image_bytes))
-                text = pytesseract.image_to_string(pil_image)
-                data = pytesseract.image_to_data(pil_image, output_type=pytesseract.Output.DICT)
-
-                # Extract fields from tesseract data
-                fields = []
-                confidences = []
-
-                for i, word in enumerate(data.get("text", [])):
-                    if word.strip():
-                        conf = int(data.get("conf", [0])[i])
-                        if conf > 0:
-                            confidences.append(conf / 100.0)
-                            # Rough field detection: cluster nearby words
-                            fields.append(
-                                FormField(
-                                    label=word,
-                                    value="",
-                                    field_type="text",
-                                    confidence=conf / 100.0,
-                                )
+            for i, word in enumerate(data.get("text", [])):
+                if word.strip():
+                    conf = int(data.get("conf", [0])[i])
+                    if conf > 0:
+                        confidences.append(conf / 100.0)
+                        # Rough field detection: cluster nearby words
+                        fields.append(
+                            FormField(
+                                label=word,
+                                value="",
+                                field_type="text",
+                                confidence=conf / 100.0,
                             )
+                        )
 
-                avg_confidence = (
-                    sum(confidences) / len(confidences) if confidences else 0.0
-                )
+            avg_confidence = (
+                sum(confidences) / len(confidences) if confidences else 0.0
+            )
 
-                return {
-                    "success": True,
-                    "text": text,
-                    "fields": fields,
-                    "avg_confidence": avg_confidence,
-                    "detection_results": data,
-                    "method": "tesseract",
-                }
+            return {
+                "success": True,
+                "text": text,
+                "fields": fields,
+                "avg_confidence": avg_confidence,
+                "detection_results": data,
+                "method": "tesseract",
+            }
 
-            except ImportError:
-                # If neither Surya nor Tesseract available
-                return {
-                    "success": False,
-                    "text": "",
-                    "fields": [],
-                    "avg_confidence": 0.0,
-                    "error": "No OCR engine available (install surya-ocr or pytesseract)",
-                }
-
+        except ImportError:
+            return {
+                "success": False,
+                "text": "",
+                "fields": [],
+                "avg_confidence": 0.0,
+                "error": "Tesseract OCR not available (install pytesseract and the tesseract binary)",
+            }
         except Exception as e:
-            self.logger.error(f"Surya OCR extraction failed: {e}")
+            self.logger.error(f"Tesseract OCR extraction failed: {e}")
             return {
                 "success": False,
                 "text": "",
@@ -232,7 +226,7 @@ class OCRService:
     ) -> ExtractionResult:
         """Main extraction pipeline:
         1. Preprocess image
-        2. Surya OCR (fast, cheap)
+        2. Tesseract OCR (fast, cheap)
         3. IF structure unclear → VLM analysis
         4. Return structured fields
 
@@ -246,7 +240,7 @@ class OCRService:
         self.logger.info(f"Starting smart extraction: {filename}")
 
         # Step 1: OCR extraction
-        ocr_result = await self.extract_with_surya(file_bytes)
+        ocr_result = await self.extract_with_tesseract(file_bytes)
 
         if not ocr_result.get("success", False):
             self.logger.error(f"OCR failed: {ocr_result.get('error')}")
@@ -401,7 +395,8 @@ async def health_check():
     return JSONResponse({
         "status": "healthy",
         "service": "PdfEzFill OCR Service",
-        "surya_available": ocr_service_instance.surya_available,
+        "ocr_engine": "tesseract",
+        "tesseract_available": ocr_service_instance.tesseract_available,
         "vlm_service_available": ocr_service_instance.vlm_service_available,
     })
 

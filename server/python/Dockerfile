@@ -40,7 +40,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     OCR_HOST=0.0.0.0 \
     OCR_PORT=5050 \
-    OCR_MODEL=surya \
+    OCR_MODEL=tesseract \
     DEVICE=cpu
 
 # Create app directory

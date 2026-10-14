@@ -405,7 +405,7 @@ The field detector complements the existing OCR service:
 
 ```
 OCR Pipeline (existing):
-1. Preprocess → 2. Surya OCR → 3. VLM (optional) → Text extraction
+1. Preprocess → 2. Tesseract OCR → 3. VLM (optional) → Text extraction
 
 Field Detection Pipeline (new):
 1. CommonForms/FFDNet → 2. OpenCV fallback → 3. Merge → Field layout

@@ -1,5 +1,5 @@
 /**
- * OCR Engine Service - Node.js Wrapper for Python Surya OCR Microservice
+ * OCR Engine Service - Node.js Wrapper for the Python Tesseract OCR Microservice
  * Provides abstraction layer with automatic fallback and error handling
  */
 
@@ -17,7 +17,9 @@ const execAsync = promisify(exec);
 // ============================================================================
 
 const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL || "http://localhost:5050";
-const OCR_ENGINE = process.env.OCR_ENGINE || "surya";
+// The OCR sidecar runs Tesseract — it is the only engine it has. (An
+// earlier label named a different engine that was never actually run.)
+const OCR_ENGINE = process.env.OCR_ENGINE || "tesseract";
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const SERVICE_TIMEOUT_MS = 60000;
@@ -57,7 +59,7 @@ export interface OCRServiceResponse {
 
 export interface HealthCheckResponse {
   status: string;
-  surya_available: boolean;
+  ocr_engine?: string;
   tesseract_available: boolean;
   timestamp: string;
 }
@@ -181,10 +183,10 @@ async function executeWithRetry<T>(
 }
 
 // ============================================================================
-// Surya OCR Extraction
+// Tesseract OCR Extraction (via the Python sidecar)
 // ============================================================================
 
-export async function extractWithSurya(
+export async function extractWithTesseract(
   imageBuffer: Buffer,
   pageNum: number = 1
 ): Promise<{
@@ -250,7 +252,7 @@ export async function extractFieldsFromImage(
   pageNum: number = 1
 ): Promise<FormField[]> {
   try {
-    const result = await extractWithSurya(imageBuffer, pageNum);
+    const result = await extractWithTesseract(imageBuffer, pageNum);
     return result.fields;
   } catch (error) {
     console.error(
