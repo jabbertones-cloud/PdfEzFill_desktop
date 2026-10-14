@@ -53,6 +53,57 @@ const upload = multer({
   },
 });
 
+
+// ─── Profile body validation (added 2026-10-14, defect 9b) ───────────────────
+// POST/PUT /api/profiles previously spread req.body straight into storage,
+// so an unexpected body shape (e.g. a nested { profile: {...} } wrapper)
+// silently persisted a profile with every field empty and returned 200.
+// These routes now reject malformed input loudly and never store an
+// empty profile.
+const PROFILE_STRING_FIELDS = [
+  "label", "fullName", "email", "phone", "dateOfBirth", "address", "city",
+  "state", "zipCode", "country", "employer", "jobTitle", "ssn",
+  "driversLicense", "signatureData",
+] as const;
+const PROFILE_ALLOWED_FIELDS: ReadonlySet<string> = new Set<string>([
+  ...PROFILE_STRING_FIELDS, "customFields", "isDefault",
+]);
+
+function validateProfileBody(body: unknown): { data?: Record<string, unknown>; error?: string } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { error: "body must be a JSON object of profile fields (e.g. label, fullName, email)" };
+  }
+  const entries = Object.entries(body as Record<string, unknown>);
+  if (entries.length === 0) {
+    return { error: "body is empty: provide at least one profile field" };
+  }
+  const unknown = entries.map(([k]) => k).filter((k) => !PROFILE_ALLOWED_FIELDS.has(k));
+  if (unknown.length > 0) {
+    return { error: `unexpected field(s): ${unknown.join(", ")}; allowed fields: ${[...PROFILE_ALLOWED_FIELDS].join(", ")}` };
+  }
+  for (const [key, value] of entries) {
+    if ((PROFILE_STRING_FIELDS as readonly string[]).includes(key) && typeof value !== "string") {
+      return { error: `field "${key}" must be a string` };
+    }
+    if (key === "customFields" && (typeof value !== "object" || value === null || Array.isArray(value))) {
+      return { error: 'field "customFields" must be an object' };
+    }
+    if (key === "isDefault" && typeof value !== "boolean") {
+      return { error: 'field "isDefault" must be a boolean' };
+    }
+  }
+  const hasValue = entries.some(([key, value]) => {
+    if (typeof value === "string") return value.trim().length > 0;
+    if (key === "customFields") return Object.keys(value as Record<string, unknown>).length > 0;
+    if (key === "isDefault") return value === true;
+    return false;
+  });
+  if (!hasValue) {
+    return { error: "no profile values provided: at least one field must be non-empty" };
+  }
+  return { data: Object.fromEntries(entries) };
+}
+
 // Helper to get user ID from request
 function getUserId(req: Request): string | null {
   const user = req.user as any;
@@ -263,9 +314,14 @@ export async function registerRoutes(
         });
       }
 
+      const validated = validateProfileBody(req.body);
+      if (validated.error) {
+        return res.status(400).json({ message: `Invalid profile: ${validated.error}` });
+      }
+
       const profile = await storage.createProfile({
         userId,
-        ...req.body,
+        ...(validated.data as any),
       });
       res.json(profile);
     } catch (error) {
@@ -282,7 +338,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Profile not found" });
       }
 
-      const profile = await storage.updateProfile(req.params.id, req.body);
+      const validated = validateProfileBody(req.body);
+      if (validated.error) {
+        return res.status(400).json({ message: `Invalid profile: ${validated.error}` });
+      }
+
+      const profile = await storage.updateProfile(req.params.id, validated.data as any);
       res.json(profile);
     } catch (error) {
       console.error("Error updating profile:", error);
