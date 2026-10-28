@@ -14,7 +14,7 @@ env:
 
 jobs:
   test:
-    runs-on: [self-hosted, smat-m1]
+    runs-on: [self-hosted, macOS, ARM64, smat-m1]
     timeout-minutes: 15
     steps:
       - name: Require physical M1 runner
@@ -52,7 +52,7 @@ jobs:
 
   license-stub-smoke:
     # Prove the test-mode validation endpoint actually serves its contract.
-    runs-on: [self-hosted, smat-m1]
+    runs-on: [self-hosted, macOS, ARM64, smat-m1]
     timeout-minutes: 10
     steps:
       - name: Require physical M1 runner
