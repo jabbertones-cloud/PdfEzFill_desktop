@@ -1,4 +1,4 @@
-# CI: run the contract/smoke suite on Linux and macOS.
+# CI: run the maintained contract/smoke suite on the approved physical M1.
 # Conventions adapted from jabbertones-cloud/claw-architect (.github/workflows/ci.yml).
 name: CI
 
@@ -14,36 +14,19 @@ env:
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        node: ['20', '22']
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, macOS, ARM64, smat-m1]
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-
-      - name: Script parse check
+      - name: Require physical M1 runner
+        shell: bash
         run: |
-          for script in scripts/license-stub.mjs tests/smoke.test.mjs; do
-            node --check "$script" && echo "OK $script"
-          done
+          set -euo pipefail
+          test "${RUNNER_OS:-}" = "macOS"
+          test "${RUNNER_ARCH:-}" = "ARM64"
+          test "$(hostname -s)" = "Tatsheens-Mini"
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
 
-      - name: Run tests (node --test, zero dependencies)
-        run: npm test
-
-  license-stub-smoke:
-    # Prove the test-mode validation endpoint actually serves its contract.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -52,10 +35,52 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Script parse check
+        run: |
+          for script in scripts/license-stub.mjs tests/*.test.mjs; do
+            node --check "$script" && echo "OK $script"
+          done
+
+      - name: Run maintained Node tests
+        run: node --test tests/*.test.mjs
+
+      - name: Run CORE-D regression tests
+        run: npx vitest run --root . tests/cored-repair.test.ts
+
+  license-stub-smoke:
+    # Prove the test-mode validation endpoint actually serves its contract.
+    runs-on: [self-hosted, macOS, ARM64, smat-m1]
+    timeout-minutes: 10
+    steps:
+      - name: Require physical M1 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_OS:-}" = "macOS"
+          test "${RUNNER_ARCH:-}" = "ARM64"
+          test "$(hostname -s)" = "Tatsheens-Mini"
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        run: npm ci
+
       - name: Start stub and exercise the contract
         run: |
           node scripts/license-stub.mjs &
           STUB_PID=$!
+          trap 'kill "$STUB_PID" 2>/dev/null || true' EXIT
           sleep 1
           curl -sf -X POST http://127.0.0.1:8787/v1/license/validate \
             -H 'Content-Type: application/json' \
@@ -65,5 +90,4 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"licenseKey":"bogus","email":"qa@example.com"}' \
             | grep -q '"valid":false'
-          kill $STUB_PID
           echo "license-stub contract OK"
