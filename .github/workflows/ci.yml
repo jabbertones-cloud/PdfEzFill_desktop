@@ -1,4 +1,5 @@
-# CI: run the maintained contract/smoke suite on the approved physical M1.
+# CI: isolated standard ARM64 macOS runners are free for this PUBLIC repository.
+# Never route public pull-request code onto the persistent physical M1.
 # Conventions adapted from jabbertones-cloud/claw-architect (.github/workflows/ci.yml).
 name: CI
 
@@ -14,16 +15,16 @@ env:
 
 jobs:
   test:
-    runs-on: [self-hosted, macOS, ARM64, smat-m1]
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
-      - name: Require physical M1 runner
+      - name: Require isolated public standard macOS ARM64 runner
         shell: bash
         run: |
           set -euo pipefail
+          test "${RUNNER_ENVIRONMENT:-}" = "github-hosted"
           test "${RUNNER_OS:-}" = "macOS"
           test "${RUNNER_ARCH:-}" = "ARM64"
-          test "$(hostname -s)" = "Tatsheens-Mini"
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
 
@@ -52,16 +53,16 @@ jobs:
 
   license-stub-smoke:
     # Prove the test-mode validation endpoint actually serves its contract.
-    runs-on: [self-hosted, macOS, ARM64, smat-m1]
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
-      - name: Require physical M1 runner
+      - name: Require isolated public standard macOS ARM64 runner
         shell: bash
         run: |
           set -euo pipefail
+          test "${RUNNER_ENVIRONMENT:-}" = "github-hosted"
           test "${RUNNER_OS:-}" = "macOS"
           test "${RUNNER_ARCH:-}" = "ARM64"
-          test "$(hostname -s)" = "Tatsheens-Mini"
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
 
