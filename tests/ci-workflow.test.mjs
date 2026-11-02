@@ -7,7 +7,7 @@ const workflow = fs.readFileSync(new URL("../.github/workflows/ci.yml", import.m
 test("CI is pinned to the approved physical M1 and runs maintained tests", () => {
   assert.doesNotMatch(workflow, /ubuntu-latest|macos-latest|windows-latest/);
   assert.equal(
-    workflow.match(/^\s*runs-on:\s*\[self-hosted, smat-m1\]\s*$/gm)?.length,
+    workflow.match(/^\s*runs-on:\s*\[self-hosted, macOS, ARM64, smat-m1\]\s*$/gm)?.length,
     2,
   );
   assert.equal(workflow.match(/test "\$\{RUNNER_OS:-\}" = "macOS"/g)?.length, 2);
